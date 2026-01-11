@@ -5,6 +5,13 @@ import { QRCodeSVG } from 'qrcode.react'
 
 type Screen = 'name' | 'mood' | 'pairing' | 'swiping' | 'decision' | 'final'
 type Mood = 'light' | 'tense' | 'romantic' | 'deep' | 'lightning'
+type Avatar = '🕵️‍♂️' | '🕶️' | '🥃' | '🗡️'
+
+const RANKS = [
+    { name: 'Rookie', min: 0 },
+    { name: 'Private Eye', min: 3 },
+    { name: 'Chief Inspector', min: 10 }
+]
 
 const SESSION_LIMIT = 20
 const LIGHTNING_LIMIT = 12
@@ -30,20 +37,37 @@ function App() {
         const saved = localStorage.getItem('cm_seen_movies')
         return saved ? JSON.parse(saved) : []
     })
+    const [avatar, setAvatar] = useState<Avatar>(() => (localStorage.getItem('cm_avatar') as Avatar) || '🕵️‍♂️')
+    const [casesSolved, setCasesSolved] = useState(() => parseInt(localStorage.getItem('cm_cases_solved') || '0'))
+
     const [showMatchAnimation, setShowMatchAnimation] = useState<Movie | null>(null)
+
+    // Derived State
+    const currentRank = RANKS.slice().reverse().find(r => casesSolved >= r.min) || RANKS[0]
+    const nextRank = RANKS.find(r => r.min > casesSolved)
 
     // Filters
     const [onlyShort, setOnlyShort] = useState(false)
+    const [runtimeRange, setRuntimeRange] = useState<[number, number]>([60, 180]) // Default 60m - 180m
     const [noHorror, setNoHorror] = useState(false)
+    const [superLikeAnim, setSuperLikeAnim] = useState(false)
 
     // URL Join Logic
     const [autoJoinId, setAutoJoinId] = useState<string | null>(null)
 
-    const { peerId, caseNumber, partnerName, connected, message, connect, connectToCase, send } = usePeer(name)
+    const [copyFeedback, setCopyFeedback] = useState('')
+
+    // Rewind History
+    const [history, setHistory] = useState<{ direction: string, movieId: string }[]>([])
+
+    // P2P Hook with Profile Data
+    const { peerId, caseNumber, partnerName, partnerAvatar, partnerRank, connected, message, connect, connectToCase, send } = usePeer(name, avatar, currentRank.name)
 
     useEffect(() => {
         if (name) localStorage.setItem('cm_name', name)
-    }, [name])
+        localStorage.setItem('cm_avatar', avatar)
+        localStorage.setItem('cm_cases_solved', casesSolved.toString())
+    }, [name, avatar, casesSolved])
 
     useEffect(() => {
         localStorage.setItem('cm_seen_movies', JSON.stringify(seenMovies))
@@ -61,11 +85,11 @@ function App() {
     // Handle auto-connection after name is set
     useEffect(() => {
         if (screen === 'pairing' && autoJoinId && !connected) {
-            // If it looks like a full PeerID (starts with cm-), use connect directly
-            // If it looks like a Case Number, user connectToCase
+            // Updated Logic: Support both 'cm-PIN' and raw 'PIN'
             if (autoJoinId.startsWith('cm-')) {
                 connect(autoJoinId)
             } else {
+                // Assert it's a case number
                 connectToCase(autoJoinId)
             }
         }
@@ -112,9 +136,11 @@ function App() {
                     let filtered = fetched
 
                     // Apply Client-Side Filters
-                    if (onlyShort) {
-                        filtered = filtered.filter(m => (m.runtime || 120) < 100)
-                    }
+                    filtered = filtered.filter(m => {
+                        const r = m.runtime || 100
+                        return r >= runtimeRange[0] && r <= runtimeRange[1]
+                    })
+
                     if (noHorror) {
                         filtered = filtered.filter(m => !m.genres.includes('Horror') && !m.genres.includes('Thriller'))
                     }
@@ -139,6 +165,11 @@ function App() {
                     handleNewMatch(movie)
                 }
             }
+        } else if (message?.type === 'undo_like') {
+            // Partner undid a like
+            setPartnerLikes(prev => prev.filter(id => id !== message.movieId))
+            // Remove match if it exists (very rare edge case where you match then immediately undo)
+            setMatches(prev => prev.filter(m => m.id !== message.movieId))
         }
     }, [message, myLikes, mySuperLikes, movies, matches])
 
@@ -164,10 +195,15 @@ function App() {
         const movie = movies[currentIndex]
         if (!movie) return
 
+        // Add to history
+        setHistory(prev => [...prev, { direction, movieId: movie.id }])
+
         if (direction === 'up' && !usedSuperLike) {
             setMySuperLikes(prev => [...prev, movie.id])
             setMyLikes(prev => [...prev, movie.id])
             setUsedSuperLike(true)
+            setSuperLikeAnim(true)
+            setTimeout(() => setSuperLikeAnim(false), 1500)
             send({ type: 'like', movieId: movie.id, isSuper: true })
             checkMatch(movie.id)
         } else if (direction === 'right') {
@@ -188,6 +224,35 @@ function App() {
         }
     }
 
+    const handleRewind = () => {
+        if (history.length === 0 || currentIndex === 0) return
+
+        const lastAction = history[history.length - 1]
+        const { direction, movieId } = lastAction
+
+        // Revert State
+        if (direction === 'up') {
+            setMySuperLikes(prev => prev.filter(id => id !== movieId))
+            setMyLikes(prev => prev.filter(id => id !== movieId))
+            setUsedSuperLike(false)
+            send({ type: 'undo_like', movieId })
+        } else if (direction === 'right') {
+            setMyLikes(prev => prev.filter(id => id !== movieId))
+            send({ type: 'undo_like', movieId })
+        } else if (direction === 'maybe') {
+            setMyMaybes(prev => prev.filter(id => id !== movieId))
+        } else if (direction === 'seen') {
+            setSeenMovies(prev => prev.filter(id => id !== movieId))
+        }
+
+        // Remove match if exists locally
+        setMatches(prev => prev.filter(m => m.id !== movieId))
+
+        // Update History & Index
+        setHistory(prev => prev.slice(0, -1))
+        setCurrentIndex(prev => prev - 1)
+    }
+
     const checkMatch = (movieId: string) => {
         if (partnerLikes.includes(movieId)) {
             const movie = movies.find(m => m.id === movieId)
@@ -199,29 +264,36 @@ function App() {
 
     const handleFinalChoice = (movie: Movie) => {
         setSeenMovies(prev => [...prev, movie.id]) // Mark as seen automatically
+        setCasesSolved(prev => prev + 1) // Increment rank progress
         setScreen('final')
     }
 
-    const handleShare = async () => {
-        // Use the case number for the share link if possible, or full ID
-        // Since url params use ?join=, we can pass the caseNumber directly if logic supports it
-        // But connect() normally takes full ID. 
-        // We updated logic to handle both. simpler to share FULL peerID or just PIN.
-        // Let's share the LINK with the FULL ID for robustness, and display the PIN on screen.
-        const url = `${window.location.protocol}//${window.location.host}${window.location.pathname}?join=cm-${caseNumber}`
+    const handleSmartShare = async () => {
+        const url = `${window.location.protocol}//${window.location.host}${window.location.pathname}?join=${caseNumber}`
+
+        // Try Native Share First
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: 'CineMatch Case File #' + caseNumber,
-                    text: `Help me solve Case #${caseNumber}. High priority.`,
+                    title: 'CineMatch Case #' + caseNumber,
+                    text: '🕵️‍♂️ New Case File Assigned. Join investigation immediately.',
                     url: url
                 })
+                return
             } catch (err) {
-                console.error(err)
+                // User cancelled or not supported, fall back to copy
+                console.log('Share cancelled, falling back to copy')
             }
-        } else {
-            navigator.clipboard.writeText(url)
-            alert(`Case Link copied! ID: ${caseNumber}`)
+        }
+
+        // Fallback: Copy to Clipboard
+        try {
+            await navigator.clipboard.writeText(url)
+            setCopyFeedback('Link Copied!')
+            if (navigator.vibrate) navigator.vibrate(50) // Haptic feedback
+            setTimeout(() => setCopyFeedback(''), 2000)
+        } catch (err) {
+            setCopyFeedback('Failed to copy')
         }
     }
 
@@ -231,6 +303,25 @@ function App() {
             <div className="container fade-in">
                 <h1 className="title">CineMatch</h1>
                 <p className="subtitle">Film Noir Edition</p>
+
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+                    {['🕵️‍♂️', '🕶️', '🥃', '🗡️'].map((a) => (
+                        <button
+                            key={a}
+                            onClick={() => setAvatar(a as Avatar)}
+                            style={{
+                                fontSize: '2rem',
+                                padding: '0.5rem',
+                                border: avatar === a ? '2px solid var(--white)' : '2px solid transparent',
+                                borderRadius: '50%',
+                                background: avatar === a ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {a}
+                        </button>
+                    ))}
+                </div>
 
                 <input
                     type="text"
@@ -246,10 +337,15 @@ function App() {
                         width: '300px',
                         outline: 'none',
                         textAlign: 'center',
-                        marginBottom: '2rem'
+                        marginBottom: '1rem'
                     }}
                     onKeyPress={(e) => e.key === 'Enter' && name.trim() && setScreen(autoJoinId ? 'pairing' : 'mood')}
                 />
+
+                <div style={{ marginBottom: '2rem', fontSize: '0.8rem', color: 'var(--gray)', textAlign: 'center' }}>
+                    <div style={{ textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--blue)', fontWeight: 900 }}>{currentRank.name}</div>
+                    <div>Cases Solved: {casesSolved} {nextRank && `(Next Rank: ${nextRank.min})`}</div>
+                </div>
 
                 <button className="btn" onClick={() => name.trim() && setScreen(autoJoinId ? 'pairing' : 'mood')}>
                     {autoJoinId ? 'Join Case' : 'New Case'}
@@ -275,18 +371,21 @@ function App() {
 
                 {/* Filters */}
                 <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-                    <button
-                        onClick={() => setOnlyShort(!onlyShort)}
-                        style={{
-                            padding: '0.5rem 1rem',
-                            border: `1px solid ${onlyShort ? 'var(--white)' : 'var(--gray)'}`,
-                            borderRadius: '20px',
-                            color: onlyShort ? 'var(--white)' : 'var(--gray)',
-                            fontSize: '0.8rem'
-                        }}
-                    >
-                        {onlyShort ? '✓ Short (<100m)' : 'Short Only'}
-                    </button>
+                    <div style={{ width: '100%', marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.8rem', color: 'var(--gray)' }}>
+                            <span>Runtime: {runtimeRange[0]}m - {runtimeRange[1]}m</span>
+                        </div>
+                        <input
+                            type="range"
+                            min="60"
+                            max="180"
+                            step="10"
+                            value={runtimeRange[1]} // Simplified single slider for max duration for now to avoid complex UI dependency
+                            onChange={(e) => setRuntimeRange([60, parseInt(e.target.value)])}
+                            style={{ width: '100%', accentColor: 'var(--white)' }}
+                        />
+                    </div>
+
                     <button
                         onClick={() => setNoHorror(!noHorror)}
                         style={{
@@ -345,66 +444,127 @@ function App() {
 
                 {connected ? (
                     <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '4rem', marginBottom: '1rem', animation: 'bounce 0.5s infinite alternate' }}>{partnerAvatar}</div>
                         <p className="subtitle">Connected with Agent {partnerName}</p>
-                        <div className="noir-loader" style={{ margin: '2rem auto' }}></div>
-                        <p style={{ fontStyle: 'italic', color: 'var(--gray)' }}>Synchronizing case files...</p>
+                        <div style={{
+                            display: 'inline-block',
+                            padding: '0.2rem 0.6rem',
+                            border: '1px solid var(--blue)',
+                            color: 'var(--blue)',
+                            borderRadius: '4px',
+                            fontSize: '0.7rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '1px',
+                            fontWeight: 900,
+                            marginBottom: '2rem'
+                        }}>
+                            {partnerRank}
+                        </div>
+                        <div className="noir-loader" style={{ margin: '0 auto' }}></div>
+                        <p style={{ fontStyle: 'italic', color: 'var(--gray)', marginTop: '2rem' }}>Synchronizing case files...</p>
                     </div>
                 ) : (
                     !autoJoinId && (
                         <>
-                            <div style={{ background: 'white', padding: '1rem', borderRadius: '4px', marginBottom: '2rem' }}>
-                                <QRCodeSVG value={`${window.location.protocol}//${window.location.host}${window.location.pathname}?join=cm-${caseNumber}`} size={160} />
+                            <div style={{
+                                background: 'white',
+                                padding: '1rem',
+                                borderRadius: '4px',
+                                marginBottom: '2rem',
+                                boxShadow: '0 0 20px rgba(255,255,255,0.2)'
+                            }}>
+                                <QRCodeSVG value={`${window.location.protocol}//${window.location.host}${window.location.pathname}?join=${caseNumber}`} size={180} />
                             </div>
 
                             {/* Case Number Display */}
-                            <div style={{ margin: '0 0 2rem 0', textAlign: 'center' }}>
-                                <p style={{ fontSize: '0.75rem', color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '2px' }}>CASE NUMBER</p>
-                                <div style={{ fontSize: '3rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '5px' }}>
+                            <div style={{ margin: '0 0 1.5rem 0', textAlign: 'center' }}>
+                                <p style={{ fontSize: '0.75rem', color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '0.5rem' }}>CASE FILE #</p>
+                                <div style={{
+                                    fontSize: '3.5rem',
+                                    fontWeight: 900,
+                                    fontFamily: 'monospace',
+                                    letterSpacing: '5px',
+                                    textShadow: '0 0 10px rgba(255,255,255,0.3)',
+                                    lineHeight: 1
+                                }}>
                                     {caseNumber || '...'}
                                 </div>
                             </div>
 
                             <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column', width: '100%', maxWidth: '300px' }}>
-                                <button className="btn" onClick={handleShare}>
-                                    Share Case File
+                                <button
+                                    className="btn"
+                                    onClick={handleSmartShare}
+                                    style={{
+                                        padding: '1rem',
+                                        background: copyFeedback ? 'var(--white)' : 'var(--dark)',
+                                        color: copyFeedback ? 'var(--black)' : 'var(--white)',
+                                        border: '1px solid var(--white)',
+                                        borderRadius: '8px',
+                                        fontSize: '1.2rem',
+                                        transition: 'all 0.2s',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '0.5rem'
+                                    }}
+                                >
+                                    {copyFeedback ? (
+                                        <><span>✓</span> {copyFeedback}</>
+                                    ) : (
+                                        <><span>🔗</span> Share Case Link</>
+                                    )}
                                 </button>
 
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '1rem 0' }}>
-                                    <div style={{ height: '1px', background: 'var(--gray)', flex: 1 }}></div>
-                                    <span style={{ color: 'var(--gray)', fontSize: '0.75rem' }}>OR MANUAL</span>
-                                    <div style={{ height: '1px', background: 'var(--gray)', flex: 1 }}></div>
+                                    <div style={{ height: '1px', background: 'var(--gray)', flex: 1, opacity: 0.3 }}></div>
+                                    <span style={{ color: 'var(--gray)', fontSize: '0.75rem' }}>OR ENTER CODE</span>
+                                    <div style={{ height: '1px', background: 'var(--gray)', flex: 1, opacity: 0.3 }}></div>
                                 </div>
 
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                                     <input
                                         type="text"
-                                        placeholder="Enter 6-digit PIN"
+                                        placeholder="PIN"
                                         value={targetId}
                                         maxLength={6}
                                         onChange={e => setTargetId(e.target.value)}
                                         style={{
-                                            background: 'transparent',
-                                            border: '1px solid var(--white)',
+                                            background: 'rgba(255,255,255,0.1)',
+                                            border: '1px solid var(--gray)',
+                                            borderRadius: '8px',
                                             padding: '1rem',
                                             textAlign: 'center',
                                             flex: 1,
                                             fontSize: '1.2rem',
                                             fontFamily: 'monospace',
                                             letterSpacing: '2px',
-                                            color: 'white'
+                                            color: 'white',
+                                            outline: 'none'
                                         }}
                                     />
-                                    <button className="btn" onClick={() => targetId && connectToCase(targetId)} style={{ width: 'auto' }}>
+                                    <button
+                                        className="btn"
+                                        onClick={() => targetId && connectToCase(targetId)}
+                                        style={{ width: 'auto', padding: '0 1.5rem', borderRadius: '8px' }}
+                                    >
                                         JOIN
                                     </button>
                                 </div>
 
                                 <button
-                                    className="btn"
                                     onClick={() => setScreen('swiping')}
-                                    style={{ opacity: 0.5, marginTop: '1rem', border: 'none', fontSize: '0.8rem' }}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'var(--gray)',
+                                        fontSize: '0.8rem',
+                                        marginTop: '1rem',
+                                        cursor: 'pointer',
+                                        textDecoration: 'underline'
+                                    }}
                                 >
-                                    Skip (Solo investigation)
+                                    Start Solo Investigation &rarr;
                                 </button>
                             </div>
                         </>
@@ -444,18 +604,48 @@ function App() {
                 {showMatchAnimation && (
                     <div style={{
                         position: 'absolute', zIndex: 999, top: 0, left: 0, right: 0, bottom: 0,
-                        background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column',
+                        background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column',
                         alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s'
                     }}>
-                        <h1 style={{
-                            fontSize: '4rem', fontStyle: 'italic', fontWeight: 900,
-                            transform: 'rotate(-5deg)', border: '4px solid white', padding: '1rem 2rem',
-                            textShadow: '0 0 20px rgba(255,255,255,0.5)',
-                            animation: 'stamp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                        <div style={{
+                            border: '4px solid white', padding: '1rem',
+                            transform: 'rotate(-5deg)',
+                            background: 'rgba(255,255,255,0.1)',
+                            backdropFilter: 'blur(5px)'
                         }}>
-                            MATCH
-                        </h1>
-                        <p style={{ marginTop: '2rem', fontSize: '1.5rem' }}>{showMatchAnimation.title}</p>
+                            <h1 style={{
+                                fontSize: '4rem', fontStyle: 'italic', fontWeight: 900,
+                                margin: 0,
+                                textShadow: '0 0 20px rgba(255,255,255,0.5)',
+                                animation: 'stamp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                            }}>
+                                MATCH
+                            </h1>
+                        </div>
+                        <p style={{ marginTop: '2rem', fontSize: '1.5rem', color: 'var(--yellow)', textTransform: 'uppercase', letterSpacing: '2px' }}>
+                            CASE FILE UPDATED
+                        </p>
+                        <p style={{ marginTop: '0.5rem', fontSize: '1rem', fontStyle: 'italic' }}>{showMatchAnimation.title}</p>
+                    </div>
+                )}
+
+                {/* Super Like Overlay */}
+                {superLikeAnim && (
+                    <div style={{
+                        position: 'absolute', zIndex: 998, top: 0, left: 0, right: 0, bottom: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        pointerEvents: 'none'
+                    }}>
+                        <div style={{
+                            border: '4px solid var(--blue)', color: 'var(--blue)',
+                            padding: '1rem 2rem', fontSize: '3rem', fontWeight: 900,
+                            transform: 'rotate(15deg) scale(1.5)',
+                            textShadow: '0 0 20px var(--blue)',
+                            opacity: 0,
+                            animation: 'stampFade 1.5s ease-out forwards'
+                        }}>
+                            PRIME SUSPECT
+                        </div>
                     </div>
                 )}
 
@@ -524,14 +714,30 @@ function App() {
                                     }}>{g}</span>
                                 ))}
                             </div>
+
+                            {/* Streaming Providers */}
+                            {currentMovie.providers && currentMovie.providers.length > 0 && (
+                                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--gray)', textTransform: 'uppercase' }}>Watch on:</span>
+                                    {currentMovie.providers.map(p => (
+                                        <img key={p.name} src={p.logo} alt={p.name} title={p.name} style={{ width: '24px', height: '24px', borderRadius: '4px' }} />
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 {/* Swipe Controls */}
                 <div style={{ padding: '1.5rem', display: 'flex', justifyContent: 'center', gap: '1rem', borderTop: '1px solid var(--dark)', alignItems: 'center' }}>
-                    <button onClick={() => handleSwipe('seen')} className="action-btn" style={{ width: '45px', height: '45px', fontSize: '0.8rem' }} title="Already Seen">
-                        👁
+                    <button
+                        onClick={handleRewind}
+                        className={`action-btn ${history.length === 0 ? 'disabled' : ''}`}
+                        disabled={history.length === 0}
+                        style={{ width: '45px', height: '45px', fontSize: '0.8rem', color: 'var(--yellow)' }}
+                        title="Rewind"
+                    >
+                        ↺
                     </button>
 
                     <button onClick={() => handleSwipe('left')} className="action-btn">
@@ -546,8 +752,8 @@ function App() {
                         ♥
                     </button>
 
-                    <button onClick={() => handleSwipe('maybe')} className="action-btn" style={{ width: '45px', height: '45px', fontSize: '0.8rem' }} title="Maybe">
-                        ?
+                    <button onClick={() => handleSwipe('seen')} className="action-btn" style={{ width: '45px', height: '45px', fontSize: '0.8rem' }} title="Already Seen">
+                        👁
                     </button>
                 </div>
             </div>

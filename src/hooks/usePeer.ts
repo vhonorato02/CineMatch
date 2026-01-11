@@ -2,30 +2,34 @@ import { useState, useEffect, useRef } from 'react'
 import Peer from 'peerjs'
 
 // Generate a "Case Number" style ID (e.g. 849201)
-// This is not cryptographically secure but fine for this use case with PeerJS
 const generateCaseId = () => {
     return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
-export function usePeer(userName: string) {
+export function usePeer(userName: string, userAvatar: string, userRank: string) {
     const [peerId, setPeerId] = useState<string>('')
     const [caseNumber, setCaseNumber] = useState<string>('')
     const [partnerId, setPartnerId] = useState<string>('')
     const [partnerName, setPartnerName] = useState<string>('')
+    const [partnerAvatar, setPartnerAvatar] = useState<string>('🕵️‍♂️')
+    const [partnerRank, setPartnerRank] = useState<string>('Rookie')
     const [connected, setConnected] = useState(false)
     const [message, setMessage] = useState<any>(null)
 
     const peerRef = useRef<Peer | null>(null)
     const connRef = useRef<any>(null)
-    const isHost = useRef<boolean>(false)
+
+    // Use refs to keep latest values without triggering re-effects
+    const profileRef = useRef({ name: userName, avatar: userAvatar, rank: userRank })
 
     useEffect(() => {
-        // Try to register a short ID. 
-        // In a real high-traffic app, this might collide, but for this scale it's fine.
-        // We prefix with 'cm-' to namespace it on the public PeerJS server
+        profileRef.current = { name: userName, avatar: userAvatar, rank: userRank }
+    }, [userName, userAvatar, userRank])
+
+    useEffect(() => {
+        // Create Peer only ONCE on mount
         const shortId = generateCaseId()
         const fullId = `cm-${shortId}`
-
         setCaseNumber(shortId)
 
         const peer = new Peer(fullId)
@@ -40,27 +44,29 @@ export function usePeer(userName: string) {
         })
 
         peer.on('error', (err) => {
-            // If ID is taken, would theoretically need to retry, but probability is low for <1000 users
             console.error("Peer error:", err)
         })
 
         return () => {
             peer.destroy()
         }
-    }, [userName])
+    }, []) // Empty dependency array = Stable Peer!
 
     const handleConnection = (conn: any) => {
         connRef.current = conn
 
         conn.on('open', () => {
             setConnected(true)
-            // Send handshake immediately
-            conn.send({ type: 'handshake', name: userName })
+            // Send handshake immediately with full profile from ref
+            const { name, avatar, rank } = profileRef.current
+            conn.send({ type: 'handshake', name, avatar, rank })
         })
 
         conn.on('data', (data: any) => {
             if (data.type === 'handshake') {
-                setPartnerName(data.name)
+                setPartnerName(data.name || 'Unknown')
+                setPartnerAvatar(data.avatar || '🕵️‍♂️')
+                setPartnerRank(data.rank || 'Rookie')
                 if (conn.peer) setPartnerId(conn.peer)
             }
             setMessage(data)
@@ -77,7 +83,6 @@ export function usePeer(userName: string) {
         })
     }
 
-    // Helper to connect using just the short code
     const connectToCase = (code: string) => {
         const fullId = `cm-${code}`
         connect(fullId)
@@ -85,11 +90,7 @@ export function usePeer(userName: string) {
 
     const connect = (targetId: string) => {
         if (!peerRef.current) return
-
-        // Close existing connection if any
-        if (connRef.current) {
-            connRef.current.close()
-        }
+        if (connRef.current) connRef.current.close()
 
         const conn = peerRef.current.connect(targetId)
         handleConnection(conn)
@@ -103,14 +104,16 @@ export function usePeer(userName: string) {
     }
 
     return {
-        peerId,       // The full ID (cm-123456)
-        caseNumber,   // The short PIN (123456)
+        peerId,
+        caseNumber,
         partnerId,
         partnerName,
+        partnerAvatar,
+        partnerRank,
         connected,
         message,
         connect,
-        connectToCase, // New function for PIN connection
+        connectToCase,
         send
     }
 }
