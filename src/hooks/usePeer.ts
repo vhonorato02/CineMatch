@@ -134,7 +134,7 @@ export const usePeer = (profile: UserProfile | null): UsePeerReturn => {
 
         setIsHost(false);
         handleConnection(conn);
-    }, [initPeer]);
+    }, []);
 
     const sendMessage = useCallback((msg: P2PMessage) => {
         if (connRef.current && connRef.current.open) {
