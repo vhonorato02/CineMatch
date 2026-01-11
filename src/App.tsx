@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Movie, SwipeDirection, SessionPhase, SessionConfig, UserProfile } from './shared/types';
-import { fetchMovies } from './services/movieService.ts';
+import { fetchMovies } from './services/movieService';
 import { usePeer } from './hooks/usePeer';
 
 // Components
@@ -159,7 +159,7 @@ const App: React.FC = () => {
     // In VibeCheck.tsx: `onStartSession(customVibe)` or `onStartSession(v.label)`.
     // So `vibeName` IS the vibe info.
 
-    const actualConfig: SessionConfig = { vibe: vibeName };
+    const actualConfig: SessionConfig = { vibe: vibeName, maxTime: 120 };
 
     const fetched = await fetchMovies(actualConfig);
     setMovies(fetched);
