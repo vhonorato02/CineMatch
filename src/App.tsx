@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Movie, SwipeDirection, SessionPhase, SessionConfig, UserProfile } from './shared/types';
 import { fetchMovies } from './services/movieService';
 import { usePeer } from './hooks/usePeer';
+import { storage, STORAGE_KEYS } from './services/storage';
+import { movieCache } from './services/movieCache';
 
 // Components
 import Header from './components/layout/Header';
@@ -12,6 +14,9 @@ import VibeCheck from './components/phases/VibeCheck';
 import Discovery from './components/phases/Discovery';
 import Watchlist from './components/phases/Watchlist';
 import MatchOverlay from './components/ui/MatchOverlay';
+import EmptyState from './components/ui/EmptyState';
+import SkeletonCard from './components/ui/SkeletonCard';
+import ConfirmDialog from './components/ui/ConfirmDialog';
 
 declare var confetti: any;
 
