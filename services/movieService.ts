@@ -11,19 +11,22 @@ const MOVIE_POSTERS = [
 ];
 
 export const fetchMovies = async (config: SessionConfig): Promise<Movie[]> => {
-  // Acessa a chave global que definimos no index.html
   const apiKey = (window as any).process?.env?.API_KEY || "";
-  
-  if (!apiKey) {
-    console.error("CineMatch: API_KEY não configurada no window.process.env");
-    return [];
-  }
+  if (!apiKey) return [];
 
   const ai = new GoogleGenAI({ apiKey });
+  const targetVibe = config.customVibe || config.vibe;
   
-  const prompt = `Gere uma lista de 15 filmes REAIS de Hollywood para a vibe "${config.vibe}".
-  A saída deve ser um JSON estrito (ARRAY).
-  Campos: title, year, rating, genres (array), description, duration, youtubeId.`;
+  const prompt = `Atue como um curador de cinema para casais. Gere 15 filmes para a vibe: "${targetVibe}".
+  Retorne um ARRAY JSON de objetos com:
+  - title (string)
+  - year (number)
+  - rating (number, 0-10)
+  - genres (array de strings)
+  - description (máx 150 caracteres)
+  - duration (minutos)
+  - youtubeId (ID do trailer)
+  - whyThis (uma frase curta explicando por que é bom para um casal nessa vibe)`;
 
   try {
     const response = await ai.models.generateContent({
@@ -42,24 +45,23 @@ export const fetchMovies = async (config: SessionConfig): Promise<Movie[]> => {
               genres: { type: Type.ARRAY, items: { type: Type.STRING } },
               description: { type: Type.STRING },
               duration: { type: Type.INTEGER },
-              youtubeId: { type: Type.STRING }
-            },
-            required: ["title", "year", "rating", "description", "youtubeId"]
+              youtubeId: { type: Type.STRING },
+              whyThis: { type: Type.STRING }
+            }
           }
         }
       }
     });
 
-    const text = response.text || "[]";
-    const data = JSON.parse(text);
+    const data = JSON.parse(response.text || "[]");
     return data.map((m: any, i: number) => ({
       ...m,
-      id: `movie-${i}-${Date.now()}`,
-      compatibility: Math.floor(Math.random() * 20) + 80,
+      id: `movie-${Date.now()}-${i}`,
+      compatibility: Math.floor(Math.random() * 15) + 85,
       imageUrl: MOVIE_POSTERS[i % MOVIE_POSTERS.length]
     }));
   } catch (e) {
-    console.error("CineMatch AI Error:", e);
+    console.error("Gemini Error:", e);
     return [];
   }
 };

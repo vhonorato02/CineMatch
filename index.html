@@ -12,22 +12,20 @@
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3163/3163478.png">
     
-    <title>CineMatch</title>
+    <title>CineMatch | Couples Movie Tinder</title>
     
-    <!-- Scripts Externos -->
+    <!-- Frameworks & Plugins -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- COMPILADOR BABEL: Essencial para rodar .tsx no GitHub Pages sem build -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,700;0,800;1,800&display=swap');
         
-        :root {
-            --rose-500: #f43f5e;
-        }
+        :root { --rose-500: #f43f5e; }
 
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
@@ -37,40 +35,38 @@
             overflow: hidden;
             overscroll-behavior-y: contain;
             -webkit-tap-highlight-color: transparent;
+            user-select: none;
         }
 
-        @keyframes progress {
-            0% { transform: scaleX(0); }
-            100% { transform: scaleX(1); }
-        }
-        .animate-progress {
-            animation: progress 2s ease-in-out infinite;
-        }
+        /* Safe Area Fixes for modern iPhones */
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .pt-safe { padding-top: env(safe-area-inset-top); }
 
+        @keyframes float-emoji {
+            0% { transform: translateY(0) scale(1); opacity: 0; }
+            20% { opacity: 1; }
+            100% { transform: translateY(-400px) scale(2) rotate(20deg); opacity: 0; }
+        }
+        .animate-float-emoji { animation: float-emoji 2.5s ease-out forwards; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
         #error-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(2, 6, 23, 0.98);
-            color: #f43f5e;
-            padding: 30px;
-            display: none;
-            z-index: 9999;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 14px;
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(2, 6, 23, 0.98); color: #f43f5e; padding: 30px;
+            display: none; z-index: 9999; overflow-y: auto; font-family: monospace;
+        }
+
+        /* Glassmorphism Classes */
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
     </style>
 
-    <!-- Simulação do ambiente Node/Vite para o navegador -->
     <script>
-        window.process = {
-            env: {
-                API_KEY: "" // A chave será usada se disponível
-            }
-        };
+        window.process = { env: { API_KEY: "" } };
     </script>
 
     <script type="importmap">
@@ -85,33 +81,12 @@
   }
 }
 </script>
-
-    <script>
-        window.onerror = function(msg, url, lineNo, columnNo, error) {
-            const overlay = document.getElementById('error-overlay');
-            if (overlay) {
-                overlay.style.display = 'block';
-                overlay.innerHTML += `<div style="margin-bottom:10px"><strong>❌ Erro:</strong> ${msg}<br><small style="color:#64748b">${url}:${lineNo}</small></div>`;
-            }
-            return false;
-        };
-    </script>
 </head>
 <body>
     <div id="root"></div>
     <div id="error-overlay">
-        <h2 style="color: white; margin-bottom: 20px; font-size: 24px; font-style: italic; font-weight: 900; text-transform: uppercase;">CineMatch Log:</h2>
+        <h2 style="color: white; margin-bottom: 20px; font-weight: 900; text-transform: uppercase;">System Log:</h2>
     </div>
-
-    <!-- 
-      O segredo: type="text/babel" e data-type="module" 
-      fazem o Babel compilar o .tsx e tratá-lo como um módulo.
-    -->
-    <script 
-      type="text/babel" 
-      data-presets="react,typescript" 
-      data-type="module" 
-      src="./index.tsx"
-    ></script>
+    <script type="text/babel" data-presets="react,typescript" data-type="module" src="./index.tsx"></script>
 </body>
 </html>
