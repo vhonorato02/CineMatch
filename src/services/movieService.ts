@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Movie, SessionConfig } from "../types.ts";
+import { Movie, SessionConfig } from "../shared/types";
 
 const MOVIE_POSTERS = [
   "https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=800",
@@ -16,7 +16,7 @@ export const fetchMovies = async (config: SessionConfig): Promise<Movie[]> => {
 
   const ai = new GoogleGenAI({ apiKey });
   const targetVibe = config.customVibe || config.vibe;
-  
+
   const prompt = `Atue como um curador de cinema para casais. Gere 15 filmes para a vibe: "${targetVibe}".
   Retorne um ARRAY JSON de objetos com:
   - title (string)

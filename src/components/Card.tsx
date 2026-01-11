@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Movie, SwipeDirection } from '../types';
+import { Movie, SwipeDirection } from '../shared/types';
 
 interface CardProps {
   movie: Movie;
@@ -34,7 +34,7 @@ const Card: React.FC<CardProps> = ({ movie, onSwipe, isActive }) => {
   const onEnd = () => {
     if (!dragging) return;
     setDragging(false);
-    
+
     const threshold = 120;
     if (pos.x > threshold) {
       onSwipe(SwipeDirection.RIGHT);
@@ -56,56 +56,56 @@ const Card: React.FC<CardProps> = ({ movie, onSwipe, isActive }) => {
   };
 
   return (
-    <div 
+    <div
       style={style}
       onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd}
       onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
       className="absolute inset-0 w-full h-[65vh] flex items-center justify-center p-4 cursor-grab active:cursor-grabbing"
     >
       <div className="w-full h-full bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,0.7)] border border-white/10 relative flex flex-col group">
-        
+
         {/* Poster com Overlays dinâmicos */}
         <div className="flex-[1.8] relative overflow-hidden">
-            <img src={movie.imageUrl} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="" />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent"></div>
-            
-            {/* Super Like Badge */}
-            {pos.y < -50 && (
-              <div className="absolute top-10 left-1/2 -translate-x-1/2 border-4 border-cyan-400 bg-cyan-400/20 text-cyan-400 px-6 py-2 rounded-xl font-black italic text-2xl uppercase -rotate-6 animate-pulse z-50">
-                SUPER LIKE
-              </div>
-            )}
+          <img src={movie.imageUrl} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent"></div>
 
-            <div className="absolute bottom-6 left-6 right-6 text-left">
-                <span className="inline-block bg-rose-500 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest mb-3 shadow-lg">
-                  {movie.compatibility}% Match
-                </span>
-                <h2 className="text-3xl font-black uppercase italic leading-none drop-shadow-xl">{movie.title}</h2>
-                <p className="text-slate-400 text-xs font-bold mt-2 uppercase tracking-widest">{movie.year} • {movie.duration} min</p>
+          {/* Super Like Badge */}
+          {pos.y < -50 && (
+            <div className="absolute top-10 left-1/2 -translate-x-1/2 border-4 border-cyan-400 bg-cyan-400/20 text-cyan-400 px-6 py-2 rounded-xl font-black italic text-2xl uppercase -rotate-6 animate-pulse z-50">
+              SUPER LIKE
             </div>
+          )}
+
+          <div className="absolute bottom-6 left-6 right-6 text-left">
+            <span className="inline-block bg-rose-500 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest mb-3 shadow-lg">
+              {movie.compatibility}% Match
+            </span>
+            <h2 className="text-3xl font-black uppercase italic leading-none drop-shadow-xl">{movie.title}</h2>
+            <p className="text-slate-400 text-xs font-bold mt-2 uppercase tracking-widest">{movie.year} • {movie.duration} min</p>
+          </div>
         </div>
 
         {/* Detalhes Curados */}
         <div className="p-6 bg-slate-950/80 backdrop-blur-xl border-t border-white/5">
-            <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
-                {movie.genres.map(g => (
-                    <span key={g} className="px-3 py-1 bg-white/5 rounded-md text-[8px] font-black uppercase text-slate-500 border border-white/5">
-                      {g}
-                    </span>
-                ))}
-            </div>
-            {movie.whyThis && (
-              <p className="text-rose-400/80 text-[11px] font-bold italic mb-3">"{movie.whyThis}"</p>
-            )}
-            <p className="text-slate-500 text-[12px] leading-relaxed line-clamp-2">{movie.description}</p>
+          <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar">
+            {movie.genres.map(g => (
+              <span key={g} className="px-3 py-1 bg-white/5 rounded-md text-[8px] font-black uppercase text-slate-500 border border-white/5">
+                {g}
+              </span>
+            ))}
+          </div>
+          {movie.whyThis && (
+            <p className="text-rose-400/80 text-[11px] font-bold italic mb-3">"{movie.whyThis}"</p>
+          )}
+          <p className="text-slate-500 text-[12px] leading-relaxed line-clamp-2">{movie.description}</p>
         </div>
 
         {/* Indicadores de Swipe Visuais */}
         {dragging && (
-            <div className="absolute inset-0 pointer-events-none z-[100] flex items-center justify-center">
-                {pos.x > 80 && <i className="fas fa-heart text-green-500 text-8xl animate-ping"></i>}
-                {pos.x < -80 && <i className="fas fa-times text-red-500 text-8xl animate-ping"></i>}
-            </div>
+          <div className="absolute inset-0 pointer-events-none z-[100] flex items-center justify-center">
+            {pos.x > 80 && <i className="fas fa-heart text-green-500 text-8xl animate-ping"></i>}
+            {pos.x < -80 && <i className="fas fa-times text-red-500 text-8xl animate-ping"></i>}
+          </div>
         )}
       </div>
     </div>
