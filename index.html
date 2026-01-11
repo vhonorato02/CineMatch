@@ -20,18 +20,11 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/src/styles/noir.css">
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,700;0,800;1,800&display=swap');
-
-        :root {
-            --rose-500: #f43f5e;
-        }
-
+        /* Base noir setup */
         body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #020617;
-            color: #f8fafc;
             margin: 0;
             overflow: hidden;
             overscroll-behavior-y: contain;
@@ -39,7 +32,7 @@
             user-select: none;
         }
 
-        /* Safe Area Fixes for modern iPhones */
+        /* Safe Area for mobile */
         .pb-safe {
             padding-bottom: env(safe-area-inset-bottom);
         }
@@ -48,6 +41,7 @@
             padding-top: env(safe-area-inset-top);
         }
 
+        /* Float animation for emojis */
         @keyframes float-emoji {
             0% {
                 transform: translateY(0) scale(1);
@@ -59,7 +53,7 @@
             }
 
             100% {
-                transform: translateY(-400px) scale(2) rotate(20deg);
+                transform: translateY(-400px) scale(2);
                 opacity: 0;
             }
         }
@@ -68,30 +62,19 @@
             animation: float-emoji 2.5s ease-out forwards;
         }
 
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-
         #error-overlay {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(2, 6, 23, 0.98);
-            color: #f43f5e;
+            background: #000000;
+            color: #ffffff;
             padding: 30px;
             display: none;
             z-index: 9999;
             overflow-y: auto;
-            font-family: monospace;
-        }
-
-        /* Glassmorphism Classes */
-        .glass {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-family: 'Inter', sans-serif;
         }
     </style>
 
@@ -100,7 +83,7 @@
     </script>
 </head>
 
-<body>
+<body class="noir-grain noir-vignette">
     <div id="root"></div>
     <div id="error-overlay">
         <h2 style="color: white; margin-bottom: 20px; font-weight: 900; text-transform: uppercase;">System Log:</h2>
