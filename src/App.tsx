@@ -4,6 +4,8 @@ import { fetchMovies } from './services/movieService';
 import { usePeer } from './hooks/usePeer';
 import { storage, STORAGE_KEYS } from './services/storage';
 import { movieCache } from './services/movieCache';
+import { gamification } from './services/gamification';
+import { soundManager } from './services/soundManager';
 
 // Components
 import Header from './components/layout/Header';
@@ -17,6 +19,8 @@ import MatchOverlay from './components/ui/MatchOverlay';
 import EmptyState from './components/ui/EmptyState';
 import SkeletonCard from './components/ui/SkeletonCard';
 import ConfirmDialog from './components/ui/ConfirmDialog';
+import StatsModal from './components/ui/StatsModal';
+import SettingsModal from './components/ui/SettingsModal';
 
 declare var confetti: any;
 
@@ -188,10 +192,21 @@ const App: React.FC = () => {
     const movie = movies[currentIndex];
     if (!movie) return;
 
+    // Record swipe for gamification
+    gamification.recordSwipe();
+
     if (direction !== SwipeDirection.LEFT) {
       setMyLikes(prev => [...prev, movie.id]);
       if (partnerLikes.includes(movie.id)) {
         triggerMatch(movie);
+      }
+
+      // Sound effects
+      if (direction === SwipeDirection.UP) {
+        soundManager.play('superlike');
+        gamification.recordSuperLike();
+      } else {
+        soundManager.play('swipe');
       }
     }
 
@@ -215,6 +230,11 @@ const App: React.FC = () => {
       storage.set(STORAGE_KEYS.WATCHLIST, updated);
       return updated;
     });
+
+    // Gamification
+    gamification.recordMatch(movie.genres);
+    soundManager.play('match');
+
     if (typeof confetti !== 'undefined') {
       confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#f43f5e', '#ffffff'] });
     }
