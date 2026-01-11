@@ -1,93 +1,34 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#020617">
-
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3163/3163478.png">
-
-    <title>CineMatch | Couples Movie Tinder</title>
-
-    <!-- Frameworks & Plugins -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/src/styles/noir.css">
-
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#000000" />
+    <title>CineMatch</title>
     <style>
-        /* Base noir setup */
-        body {
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #000;
+            color: #fff;
             overflow: hidden;
-            overscroll-behavior-y: contain;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
         }
 
-        /* Safe Area for mobile */
-        .pb-safe {
-            padding-bottom: env(safe-area-inset-bottom);
-        }
-
-        .pt-safe {
-            padding-top: env(safe-area-inset-top);
-        }
-
-        /* Float animation for emojis */
-        @keyframes float-emoji {
-            0% {
-                transform: translateY(0) scale(1);
-                opacity: 0;
-            }
-
-            20% {
-                opacity: 1;
-            }
-
-            100% {
-                transform: translateY(-400px) scale(2);
-                opacity: 0;
-            }
-        }
-
-        .animate-float-emoji {
-            animation: float-emoji 2.5s ease-out forwards;
-        }
-
-        #error-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: #000000;
-            color: #ffffff;
-            padding: 30px;
-            display: none;
-            z-index: 9999;
-            overflow-y: auto;
-            font-family: 'Inter', sans-serif;
+        #root {
+            width: 100vw;
+            height: 100vh;
         }
     </style>
-
-    <script>
-        window.process = { env: { API_KEY: "" } };
-    </script>
 </head>
 
-<body class="noir-grain noir-vignette">
+<body>
     <div id="root"></div>
-    <div id="error-overlay">
-        <h2 style="color: white; margin-bottom: 20px; font-weight: 900; text-transform: uppercase;">System Log:</h2>
-    </div>
     <script type="module" src="/src/main.tsx"></script>
 </body>
 
