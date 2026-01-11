@@ -49,10 +49,13 @@ const App: React.FC = () => {
 
   // --- Inicialização & Persistência ---
   useEffect(() => {
-    const savedProfile = localStorage.getItem('cm_profile');
-    const savedWatchlist = localStorage.getItem('cm_watchlist');
-    if (savedProfile) setProfile(JSON.parse(savedProfile));
-    if (savedWatchlist) setWatchlist(JSON.parse(savedWatchlist));
+    const savedProfile = storage.get(STORAGE_KEYS.PROFILE, null);
+    const savedWatchlist = storage.get(STORAGE_KEYS.WATCHLIST, []);
+    const savedIndex = storage.get(STORAGE_KEYS.CURRENT_INDEX, 0);
+
+    if (savedProfile) setProfile(savedProfile);
+    if (savedWatchlist) setWatchlist(savedWatchlist);
+    if (savedIndex) setCurrentIndex(savedIndex);
 
     setTimeout(() => {
       setPhase(savedProfile ? 'pairing' : 'profile_setup');
@@ -150,23 +153,31 @@ const App: React.FC = () => {
   // --- Ações ---
   const handleProfileComplete = (p: UserProfile) => {
     setProfile(p);
-    localStorage.setItem('cm_profile', JSON.stringify(p));
+    storage.set(STORAGE_KEYS.PROFILE, p);
     setPhase('pairing');
   };
 
   const startSession = async (vibeName: string) => {
     setLoading(true);
-    const config: SessionConfig = { vibe: vibeName, maxTime: 120, customVibe: vibeName === 'custom' ? undefined : vibeName };
-    // Wait, reusing logic: if vibeName is 'custom', we assume user typed it in VibeCheck?
-    // Actually VibeCheck component handles passing the actual string.
-    // Rewrite: VibeCheck passes "Custom Vibe String" or "Label".
 
-    // In VibeCheck.tsx: `onStartSession(customVibe)` or `onStartSession(v.label)`.
-    // So `vibeName` IS the vibe info.
+    // Check cache first
+    const cached = movieCache.get(vibeName);
+    if (cached && cached.length > 0) {
+      setMovies(cached);
+      sendMessage({ type: 'START_SESSION', movies: cached, config: { vibe: vibeName, maxTime: 120 } });
+      setPhase('discovery');
+      setLoading(false);
+      return;
+    }
 
     const actualConfig: SessionConfig = { vibe: vibeName, maxTime: 120 };
-
     const fetched = await fetchMovies(actualConfig);
+
+    // Cache the results
+    if (fetched.length > 0) {
+      movieCache.set(vibeName, fetched);
+    }
+
     setMovies(fetched);
     sendMessage({ type: 'START_SESSION', movies: fetched, config: actualConfig });
     setPhase('discovery');
@@ -201,7 +212,7 @@ const App: React.FC = () => {
     setMatch(movie);
     setWatchlist(prev => {
       const updated = [...prev, movie];
-      localStorage.setItem('cm_watchlist', JSON.stringify(updated));
+      storage.set(STORAGE_KEYS.WATCHLIST, updated);
       return updated;
     });
     if (typeof confetti !== 'undefined') {
