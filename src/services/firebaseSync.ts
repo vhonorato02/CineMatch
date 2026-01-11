@@ -5,14 +5,14 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 
-// Free tier Firebase config (replace with your own)
+// Free tier Firebase config (using Vite environment variables)
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY", // User will need to add this
-    authDomain: "cinematch.firebaseapp.com",
-    projectId: "cinematch",
-    storageBucket: "cinematch.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "1:123456789:web:abcdef"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
 };
 
 // Initialize Firebase
