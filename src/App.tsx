@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { usePeer } from './hooks/usePeer'
 import { fetchMoviesByMood, Movie } from './services/movies'
-import QRCode from 'react-qr-code'
+import { QRCodeSVG } from 'qrcode.react'
 
 type Screen = 'name' | 'mood' | 'pairing' | 'swiping' | 'decision' | 'final'
 type Mood = 'light' | 'tense' | 'romantic' | 'deep' | 'lightning'
@@ -332,7 +332,7 @@ function App() {
                     !autoJoinId && (
                         <>
                             <div style={{ background: 'white', padding: '1rem', borderRadius: '4px', marginBottom: '2rem' }}>
-                                <QRCode value={`${window.location.protocol}//${window.location.host}${window.location.pathname}?join=${peerId}`} size={160} />
+                                <QRCodeSVG value={`${window.location.protocol}//${window.location.host}${window.location.pathname}?join=${peerId}`} size={160} />
                             </div>
 
                             <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column', width: '100%', maxWidth: '300px' }}>
