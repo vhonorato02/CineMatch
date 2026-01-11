@@ -39,8 +39,8 @@ const NoirProfileSetup: React.FC<NoirProfileSetupProps> = ({ onComplete }) => {
                                     type="button"
                                     onClick={() => setSelectedAvatar(avatar)}
                                     className={`aspect-square flex items-center justify-center text-2xl border transition-all ${selectedAvatar === avatar
-                                            ? 'border-white bg-white/10'
-                                            : 'border-gray-800 hover:border-gray-600'
+                                        ? 'border-white bg-white/10'
+                                        : 'border-gray-800 hover:border-gray-600'
                                         }`}
                                 >
                                     {avatar}

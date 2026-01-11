@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Movie, SwipeDirection } from '../../shared/types';
+import { Movie, SwipeDirection } from '../shared/types';
 
 interface NoirCardProps {
     movie: Movie;

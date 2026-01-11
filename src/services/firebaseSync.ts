@@ -7,12 +7,12 @@ import { getAuth, signInAnonymously } from 'firebase/auth';
 
 // Free tier Firebase config (using Vite environment variables)
 const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-    appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
+    apiKey: "AIzaSyA7UUtGdMHW3IqFI9nraI3QAA0M4pGgTEE", // ← SUBSTITUIR
+    authDomain: "ccinematch-dafa0.firebaseapp.com", // ← SUBSTITUIR
+    projectId: "cinematch-dafa0", // ← SUBSTITUIR
+    storageBucket: "cinematch.appspot.com", // ← SUBSTITUIR
+    messagingSenderId: "301006107782", // ← SUBSTITUIR
+    appId: "11:301006107782:web:930066f720fd003255cd07" // ← SUBSTITUIR
 };
 
 // Initialize Firebase
