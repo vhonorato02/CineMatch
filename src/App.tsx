@@ -6,21 +6,21 @@ import { storage, STORAGE_KEYS } from './services/storage';
 import { movieCache } from './services/movieCache';
 import { gamification } from './services/gamification';
 import { soundManager } from './services/soundManager';
+import { historyManager } from './services/historyManager';
 
-// Components
-import Header from './components/layout/Header';
-import Splash from './components/phases/Splash';
-import ProfileSetup from './components/phases/ProfileSetup';
-import Pairing from './components/phases/Pairing';
-import VibeCheck from './components/phases/VibeCheck';
-import Discovery from './components/phases/Discovery';
-import Watchlist from './components/phases/Watchlist';
-import MatchOverlay from './components/ui/MatchOverlay';
-import EmptyState from './components/ui/EmptyState';
-import SkeletonCard from './components/ui/SkeletonCard';
-import ConfirmDialog from './components/ui/ConfirmDialog';
-import StatsModal from './components/ui/StatsModal';
-import SettingsModal from './components/ui/SettingsModal';
+// Noir Components
+import NoirHeader from './components/layout/NoirHeader';
+import NoirSplash from './components/phases/NoirSplash';
+import NoirProfileSetup from './components/phases/NoirProfileSetup';
+import NoirPairing from './components/phases/NoirPairing';
+import NoirVibeCheck from './components/phases/NoirVibeCheck';
+import NoirDiscovery from './components/phases/NoirDiscovery';
+import NoirWatchlist from './components/phases/NoirWatchlist';
+import NoirMatchOverlay from './components/ui/NoirMatchOverlay';
+import NoirStatsModal from './components/ui/NoirStatsModal';
+import NoirSettingsModal from './components/ui/NoirSettingsModal';
+import MovieDetailsModal from './components/ui/MovieDetailsModal';
+import NotesModal from './components/ui/NotesModal';
 
 declare var confetti: any;
 
@@ -29,8 +29,8 @@ const App: React.FC = () => {
   const [phase, setPhase] = useState<SessionPhase>('splash');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [partner, setPartner] = useState<UserProfile | null>(null);
-  const [isTyping, setIsTyping] = useState(false); // partner typing
-  const [reactions, setReactions] = useState<{ id: number, emoji: string }[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [partnerReaction, setPartnerReaction] = useState<string | null>(null);
 
   // --- Estados de Cinema ---
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -41,15 +41,21 @@ const App: React.FC = () => {
   const [match, setMatch] = useState<Movie | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // --- Hooks ---
+  // --- UI States ---
+  const [showWatchlist, setShowWatchlist] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
+  const [movieForNotes, setMovieForNotes] = useState<Movie | null>(null);
+
+  // --- P2P Hook ---
   const {
     peerId,
     connStatus,
     connectToPartner,
     sendMessage,
     lastMessage,
-    resetConnection
-  } = usePeer(profile);
+  } = usePeer();
 
   // --- Inicialização & Persistência ---
   useEffect(() => {
@@ -63,96 +69,51 @@ const App: React.FC = () => {
 
     setTimeout(() => {
       setPhase(savedProfile ? 'pairing' : 'profile_setup');
-    }, 2000);
+    }, 2500);
   }, []);
 
-  // --- Invite Link Logic ---
-  useEffect(() => {
-    if (phase === 'pairing' && profile) {
-      const params = new URLSearchParams(window.location.search);
-      const inviteId = params.get('peer');
-      if (inviteId && inviteId !== peerId) {
-        // Clear param to avoid loop? Or just connect.
-        console.log("Found invite link, connecting to:", inviteId);
-        connectToPartner(inviteId);
-      }
-    }
-  }, [phase, profile, peerId, connectToPartner]);
-
-
-  // --- P2P Message Handling ---
+  // --- Mensagens P2P ---
   useEffect(() => {
     if (!lastMessage) return;
 
     switch (lastMessage.type) {
       case 'HANDSHAKE':
         setPartner(lastMessage.profile);
-        setPhase('vibe_check');
+        soundManager.play('notification');
         break;
-      case 'REACTION':
-        triggerReaction(lastMessage.emoji, false);
+
+      case 'SWIPE_UPDATE':
+        if (lastMessage.direction !== SwipeDirection.LEFT) {
+          setPartnerLikes(prev => [...prev, lastMessage.movieId]);
+          const movie = movies.find(m => m.id === lastMessage.movieId);
+          if (movie && myLikes.includes(lastMessage.movieId)) {
+            triggerMatch(movie);
+          }
+        }
         break;
-      case 'TYPING_STATUS':
-        setIsTyping(lastMessage.isTyping);
-        break;
+
       case 'START_SESSION':
         setMovies(lastMessage.movies);
         setPhase('discovery');
         break;
-      case 'SWIPE_UPDATE':
-        if (lastMessage.direction === SwipeDirection.RIGHT || lastMessage.direction === SwipeDirection.UP) {
-          setPartnerLikes(prev => {
-            const newLikes = [...prev, lastMessage.movieId];
-            // Late join match check? 
-            // Ideally we check match whenever myLikes or partnerLikes changes.
-            return newLikes;
-          });
-        }
+
+      case 'REACTION':
+        setPartnerReaction(lastMessage.emoji);
+        setTimeout(() => setPartnerReaction(null), 2000);
         break;
-    }
-  }, [lastMessage]);
 
-  // Check for Match when Likes update
-  useEffect(() => {
-    if (phase !== 'discovery') return;
-
-    // Check if any of my likes are in partner likes
-    // But we only want to trigger match if it wasn't triggered before?
-    // Actually, usually we trigger on swap.
-    // If I just swiped right, I check partner likes.
-    // If partner swiped right (received message), I check my likes.
-
-    // optimization: only check the last addition?
-    // For now simple intersection check on every update is fine for < 15 items.
-
-    const matches = movies.filter(m => myLikes.includes(m.id) && partnerLikes.includes(m.id));
-    if (matches.length > 0) {
-      // Find the most recent one or the one not in watchlist yet?
-      // Simplified: if current movie satisfies condition.
-
-      matches.forEach(m => {
-        // Check if already in watchlist to avoid double trigger?
-        // Actually triggerMatch handles UI.
-
-        // But we want to trigger ONLY when the event happens.
-        // So this Effect might be too broad.
-        // Let's rely on handleSwipe and existing Message handler.
-      });
-    }
-  }, [myLikes, partnerLikes, movies, phase]);
-
-  // Special handler for partner swipe triggering match
-  useEffect(() => {
-    if (lastMessage?.type === 'SWIPE_UPDATE' &&
-      (lastMessage.direction === SwipeDirection.RIGHT || lastMessage.direction === SwipeDirection.UP)) {
-
-      if (myLikes.includes(lastMessage.movieId)) {
-        const movie = movies.find(m => m.id === lastMessage.movieId);
-        if (movie) triggerMatch(movie);
-      }
+      case 'TYPING_STATUS':
+        setIsTyping(lastMessage.isTyping);
+        break;
     }
   }, [lastMessage, myLikes, movies]);
 
+  // --- Enviar Handshake ---
+  useEffect(() => {
+    if (profile && connStatus === 'connected') {
+      sendMessage({ type: 'HANDSHAKE', profile });
+    }
+  }, [profile, connStatus, sendMessage]);
 
   // --- Ações ---
   const handleProfileComplete = (p: UserProfile) => {
@@ -161,10 +122,17 @@ const App: React.FC = () => {
     setPhase('pairing');
   };
 
+  const handleConnect = (targetId: string) => {
+    connectToPartner(targetId);
+  };
+
+  const handleSkipPairing = () => {
+    setPhase('vibe_check');
+  };
+
   const startSession = async (vibeName: string) => {
     setLoading(true);
 
-    // Check cache first
     const cached = movieCache.get(vibeName);
     if (cached && cached.length > 0) {
       setMovies(cached);
@@ -177,7 +145,6 @@ const App: React.FC = () => {
     const actualConfig: SessionConfig = { vibe: vibeName, maxTime: 120 };
     const fetched = await fetchMovies(actualConfig);
 
-    // Cache the results
     if (fetched.length > 0) {
       movieCache.set(vibeName, fetched);
     }
@@ -192,7 +159,10 @@ const App: React.FC = () => {
     const movie = movies[currentIndex];
     if (!movie) return;
 
-    // Record swipe for gamification
+    // Record for history
+    historyManager.addSwipe(movie, direction);
+
+    // Gamification
     gamification.recordSwipe();
 
     if (direction !== SwipeDirection.LEFT) {
@@ -201,7 +171,6 @@ const App: React.FC = () => {
         triggerMatch(movie);
       }
 
-      // Sound effects
       if (direction === SwipeDirection.UP) {
         soundManager.play('superlike');
         gamification.recordSuperLike();
@@ -215,13 +184,16 @@ const App: React.FC = () => {
     if (navigator.vibrate) navigator.vibrate(direction === SwipeDirection.LEFT ? 10 : 30);
 
     if (currentIndex + 1 >= movies.length) {
-      // End of list?
-      // setPhase('session_end'); 
-      // or just stay there.
+      setPhase('watchlist');
     } else {
       setCurrentIndex(prev => prev + 1);
+      storage.set(STORAGE_KEYS.CURRENT_INDEX, currentIndex + 1);
     }
   }, [movies, currentIndex, partnerLikes, sendMessage]);
+
+  const handleReaction = (emoji: string) => {
+    sendMessage({ type: 'REACTION', emoji });
+  };
 
   const triggerMatch = (movie: Movie) => {
     setMatch(movie);
@@ -231,90 +203,133 @@ const App: React.FC = () => {
       return updated;
     });
 
-    // Gamification
     gamification.recordMatch(movie.genres);
     soundManager.play('match');
 
     if (typeof confetti !== 'undefined') {
-      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#f43f5e', '#ffffff'] });
+      confetti({ particleCount: 100, spread: 60, origin: { y: 0.6 }, colors: ['#ffffff', '#000000'] });
     }
   };
 
-  const triggerReaction = (emoji: string, send = true) => {
-    const id = Date.now();
-    setReactions(prev => [...prev, { id, emoji }]);
-    if (send) sendMessage({ type: 'REACTION', emoji });
-    setTimeout(() => setReactions(prev => prev.filter(r => r.id !== id)), 2500);
+  const handleRewind = () => {
+    const last = historyManager.rewind();
+    if (last && currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+      soundManager.play('notification');
+    }
   };
 
   // --- Render ---
   return (
-    <div className="h-screen bg-slate-950 text-white flex flex-col overflow-hidden relative pb-safe">
+    <div className="w-full h-screen overflow-hidden bg-black text-white">
+      {/* Header - shown on most phases */}
+      {!['splash', 'profile_setup'].includes(phase) && (
+        <NoirHeader
+          connStatus={connStatus}
+          profile={profile}
+          partner={partner}
+          onOpenWatchlist={() => setShowWatchlist(true)}
+          onOpenStats={() => setShowStats(true)}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+      )}
 
-      {/* Reações Flutuantes */}
-      <div className="fixed inset-0 pointer-events-none z-[1000] overflow-hidden">
-        {reactions.map(r => (
-          <div key={r.id} className="absolute bottom-20 left-1/2 -translate-x-1/2 text-6xl animate-float-emoji">
-            {r.emoji}
-          </div>
-        ))}
-      </div>
+      {/* Main Content */}
+      <div className={!['splash', 'profile_setup'].includes(phase) ? 'h-[calc(100vh-73px)]' : 'h-screen'}>
+        {phase === 'splash' && <NoirSplash />}
 
-      <Header
-        connStatus={connStatus}
-        profile={profile}
-        partner={partner}
-        onOpenWatchlist={() => setPhase('watchlist')}
-      />
-
-      <main className="flex-1 flex flex-col items-center justify-center p-6 max-w-lg mx-auto w-full relative">
-
-        {phase === 'splash' && <Splash />}
-
-        {phase === 'profile_setup' && <ProfileSetup onComplete={handleProfileComplete} />}
+        {phase === 'profile_setup' && (
+          <NoirProfileSetup onComplete={handleProfileComplete} />
+        )}
 
         {phase === 'pairing' && (
-          <Pairing
-            myPeerId={peerId}
-            onConnect={connectToPartner}
-            onSkip={() => setPhase('vibe_check')}
+          <NoirPairing
+            myPeerId={peerId || ''}
+            onConnect={handleConnect}
+            onSkip={handleSkipPairing}
           />
         )}
 
         {phase === 'vibe_check' && (
-          <VibeCheck
+          <NoirVibeCheck
             onStartSession={startSession}
             onTyping={(typing) => sendMessage({ type: 'TYPING_STATUS', isTyping: typing })}
             isPartnerTyping={isTyping}
           />
         )}
 
-        {phase === 'discovery' && (
-          <Discovery
+        {phase === 'discovery' && movies.length > 0 && (
+          <NoirDiscovery
             movies={movies}
             currentIndex={currentIndex}
-            loading={loading}
             onSwipe={handleSwipe}
-            onReaction={triggerReaction}
+            onReaction={handleReaction}
+            partnerReaction={partnerReaction}
           />
         )}
 
-        {phase === 'watchlist' && (
-          <Watchlist
-            watchlist={watchlist}
-            onBack={() => setPhase(movies.length > 0 ? 'discovery' : 'vibe_check')}
-            onRemove={(id) => {
-              setWatchlist(prev => {
-                const updated = prev.filter(m => m.id !== id);
-                localStorage.setItem('cm_watchlist', JSON.stringify(updated));
-                return updated;
-              });
+        {phase === 'watchlist' || (phase === 'discovery' && currentIndex >= movies.length) ? (
+          <NoirWatchlist
+            movies={watchlist}
+            onClose={() => setPhase('vibe_check')}
+            onMovieClick={(movie) => setSelectedMovie(movie)}
+          />
+        ) : null}
+      </div>
+
+      {/* Modals */}
+      {match && (
+        <NoirMatchOverlay
+          movieTitle={match.title}
+          onClose={() => setMatch(null)}
+        />
+      )}
+
+      {showWatchlist && (
+        <div className="fixed inset-0 z-[2000]">
+          <NoirWatchlist
+            movies={watchlist}
+            onClose={() => setShowWatchlist(false)}
+            onMovieClick={(movie) => {
+              setSelectedMovie(movie);
+              setShowWatchlist(false);
             }}
           />
-        )}
-      </main>
+        </div>
+      )}
 
-      {match && <MatchOverlay match={match} onClose={() => setMatch(null)} />}
+      {showStats && (
+        <NoirStatsModal onClose={() => setShowStats(false)} />
+      )}
+
+      {showSettings && (
+        <NoirSettingsModal onClose={() => setShowSettings(false)} />
+      )}
+
+      {selectedMovie && (
+        <MovieDetailsModal
+          movie={selectedMovie}
+          onClose={() => setSelectedMovie(null)}
+        />
+      )}
+
+      {movieForNotes && profile && (
+        <NotesModal
+          movie={movieForNotes}
+          userName={profile.name}
+          onClose={() => setMovieForNotes(null)}
+        />
+      )}
+
+      {/* Loading Overlay */}
+      {loading && (
+        <div className="fixed inset-0 z-[5000] bg-black/95 flex items-center justify-center">
+          <div className="text-center">
+            <div className="noir-loading mb-4"></div>
+            <p className="text-sm text-gray-600">Finding films...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
