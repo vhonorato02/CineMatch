@@ -30,6 +30,7 @@ function App() {
         const saved = localStorage.getItem('cm_seen_movies')
         return saved ? JSON.parse(saved) : []
     })
+    const [showMatchAnimation, setShowMatchAnimation] = useState<Movie | null>(null)
 
     // Filters
     const [onlyShort, setOnlyShort] = useState(false)
@@ -38,7 +39,7 @@ function App() {
     // URL Join Logic
     const [autoJoinId, setAutoJoinId] = useState<string | null>(null)
 
-    const { peerId, partnerName, connected, message, connect, send } = usePeer(name)
+    const { peerId, caseNumber, partnerName, connected, message, connect, connectToCase, send } = usePeer(name)
 
     useEffect(() => {
         if (name) localStorage.setItem('cm_name', name)
@@ -60,10 +61,15 @@ function App() {
     // Handle auto-connection after name is set
     useEffect(() => {
         if (screen === 'pairing' && autoJoinId && !connected) {
-            setTargetId(autoJoinId)
-            connect(autoJoinId)
+            // If it looks like a full PeerID (starts with cm-), use connect directly
+            // If it looks like a Case Number, user connectToCase
+            if (autoJoinId.startsWith('cm-')) {
+                connect(autoJoinId)
+            } else {
+                connectToCase(autoJoinId)
+            }
         }
-    }, [screen, autoJoinId, connected, connect])
+    }, [screen, autoJoinId, connected, connect, connectToCase])
 
     // Auto-advance if connected
     useEffect(() => {
@@ -130,7 +136,7 @@ function App() {
             if (myLikes.includes(message.movieId) || mySuperLikes.includes(message.movieId)) {
                 const movie = movies.find(m => m.id === message.movieId)
                 if (movie && !matches.find(m => m.id === movie.id)) {
-                    setMatches(prev => [...prev, movie])
+                    handleNewMatch(movie)
                 }
             }
         }
@@ -140,9 +146,19 @@ function App() {
     useEffect(() => {
         const limit = mood === 'lightning' ? 3 : 5
         if (matches.length >= limit && screen === 'swiping') {
-            setScreen('decision')
+            // Wait a bit if we are showing match animation
+            if (!showMatchAnimation) {
+                setScreen('decision')
+            }
         }
-    }, [matches.length, screen, mood])
+    }, [matches.length, screen, mood, showMatchAnimation])
+
+    const handleNewMatch = (movie: Movie) => {
+        setMatches(prev => [...prev, movie])
+        // Trigger Match Animation
+        setShowMatchAnimation(movie)
+        setTimeout(() => setShowMatchAnimation(null), 2500)
+    }
 
     const handleSwipe = (direction: 'left' | 'right' | 'up' | 'maybe' | 'seen') => {
         const movie = movies[currentIndex]
@@ -176,7 +192,7 @@ function App() {
         if (partnerLikes.includes(movieId)) {
             const movie = movies.find(m => m.id === movieId)
             if (movie && !matches.find(m => m.id === movie.id)) {
-                setMatches(prev => [...prev, movie])
+                handleNewMatch(movie)
             }
         }
     }
@@ -187,12 +203,17 @@ function App() {
     }
 
     const handleShare = async () => {
-        const url = `${window.location.protocol}//${window.location.host}${window.location.pathname}?join=${peerId}`
+        // Use the case number for the share link if possible, or full ID
+        // Since url params use ?join=, we can pass the caseNumber directly if logic supports it
+        // But connect() normally takes full ID. 
+        // We updated logic to handle both. simpler to share FULL peerID or just PIN.
+        // Let's share the LINK with the FULL ID for robustness, and display the PIN on screen.
+        const url = `${window.location.protocol}//${window.location.host}${window.location.pathname}?join=cm-${caseNumber}`
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: 'CineMatch Case File',
-                    text: 'I have a new case for us. High priority.',
+                    title: 'CineMatch Case File #' + caseNumber,
+                    text: `Help me solve Case #${caseNumber}. High priority.`,
                     url: url
                 })
             } catch (err) {
@@ -200,7 +221,7 @@ function App() {
             }
         } else {
             navigator.clipboard.writeText(url)
-            alert('Case file link copied.')
+            alert(`Case Link copied! ID: ${caseNumber}`)
         }
     }
 
@@ -332,7 +353,15 @@ function App() {
                     !autoJoinId && (
                         <>
                             <div style={{ background: 'white', padding: '1rem', borderRadius: '4px', marginBottom: '2rem' }}>
-                                <QRCodeSVG value={`${window.location.protocol}//${window.location.host}${window.location.pathname}?join=${peerId}`} size={160} />
+                                <QRCodeSVG value={`${window.location.protocol}//${window.location.host}${window.location.pathname}?join=cm-${caseNumber}`} size={160} />
+                            </div>
+
+                            {/* Case Number Display */}
+                            <div style={{ margin: '0 0 2rem 0', textAlign: 'center' }}>
+                                <p style={{ fontSize: '0.75rem', color: 'var(--gray)', textTransform: 'uppercase', letterSpacing: '2px' }}>CASE NUMBER</p>
+                                <div style={{ fontSize: '3rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '5px' }}>
+                                    {caseNumber || '...'}
+                                </div>
                             </div>
 
                             <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column', width: '100%', maxWidth: '300px' }}>
@@ -340,34 +369,44 @@ function App() {
                                     Share Case File
                                 </button>
 
-                                <button className="btn" onClick={() => targetId && connect(targetId)} style={{ fontSize: '0.8rem', padding: '0.5rem', border: 'none', color: 'var(--gray)' }}>
-                                    Use Manual ID
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', margin: '1rem 0' }}>
+                                    <div style={{ height: '1px', background: 'var(--gray)', flex: 1 }}></div>
+                                    <span style={{ color: 'var(--gray)', fontSize: '0.75rem' }}>OR MANUAL</span>
+                                    <div style={{ height: '1px', background: 'var(--gray)', flex: 1 }}></div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter 6-digit PIN"
+                                        value={targetId}
+                                        maxLength={6}
+                                        onChange={e => setTargetId(e.target.value)}
+                                        style={{
+                                            background: 'transparent',
+                                            border: '1px solid var(--white)',
+                                            padding: '1rem',
+                                            textAlign: 'center',
+                                            flex: 1,
+                                            fontSize: '1.2rem',
+                                            fontFamily: 'monospace',
+                                            letterSpacing: '2px',
+                                            color: 'white'
+                                        }}
+                                    />
+                                    <button className="btn" onClick={() => targetId && connectToCase(targetId)} style={{ width: 'auto' }}>
+                                        JOIN
+                                    </button>
+                                </div>
 
                                 <button
                                     className="btn"
                                     onClick={() => setScreen('swiping')}
-                                    style={{ opacity: 0.5, marginTop: '1rem' }}
+                                    style={{ opacity: 0.5, marginTop: '1rem', border: 'none', fontSize: '0.8rem' }}
                                 >
-                                    Solo Investigation
+                                    Skip (Solo investigation)
                                 </button>
                             </div>
-
-                            {/* Hidden input for manual override */}
-                            <input
-                                type="text"
-                                placeholder="Manual Peer ID"
-                                value={targetId}
-                                onChange={e => setTargetId(e.target.value)}
-                                style={{
-                                    background: 'transparent',
-                                    border: '1px solid var(--charcoal)',
-                                    color: 'var(--black)',
-                                    marginTop: '2rem',
-                                    textAlign: 'center',
-                                    fontSize: '0.7rem'
-                                }}
-                            />
                         </>
                     )
                 )}
@@ -399,7 +438,27 @@ function App() {
         }
 
         return (
-            <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+
+                {/* Match Animation Overlay */}
+                {showMatchAnimation && (
+                    <div style={{
+                        position: 'absolute', zIndex: 999, top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s'
+                    }}>
+                        <h1 style={{
+                            fontSize: '4rem', fontStyle: 'italic', fontWeight: 900,
+                            transform: 'rotate(-5deg)', border: '4px solid white', padding: '1rem 2rem',
+                            textShadow: '0 0 20px rgba(255,255,255,0.5)',
+                            animation: 'stamp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                        }}>
+                            MATCH
+                        </h1>
+                        <p style={{ marginTop: '2rem', fontSize: '1.5rem' }}>{showMatchAnimation.title}</p>
+                    </div>
+                )}
+
                 {/* Header */}
                 <div style={{ padding: '1rem', borderBottom: '1px solid var(--dark)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.75rem', color: 'var(--gray)' }}>

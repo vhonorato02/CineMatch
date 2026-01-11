@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import Peer from 'peerjs'
 
+// Generate a "Case Number" style ID (e.g. 849201)
+// This is not cryptographically secure but fine for this use case with PeerJS
+const generateCaseId = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString()
+}
+
 export function usePeer(userName: string) {
     const [peerId, setPeerId] = useState<string>('')
+    const [caseNumber, setCaseNumber] = useState<string>('')
     const [partnerId, setPartnerId] = useState<string>('')
     const [partnerName, setPartnerName] = useState<string>('')
     const [connected, setConnected] = useState(false)
@@ -10,10 +17,18 @@ export function usePeer(userName: string) {
 
     const peerRef = useRef<Peer | null>(null)
     const connRef = useRef<any>(null)
+    const isHost = useRef<boolean>(false)
 
     useEffect(() => {
-        // Initialize Peer with a random ID
-        const peer = new Peer()
+        // Try to register a short ID. 
+        // In a real high-traffic app, this might collide, but for this scale it's fine.
+        // We prefix with 'cm-' to namespace it on the public PeerJS server
+        const shortId = generateCaseId()
+        const fullId = `cm-${shortId}`
+
+        setCaseNumber(shortId)
+
+        const peer = new Peer(fullId)
         peerRef.current = peer
 
         peer.on('open', (id) => {
@@ -22,6 +37,11 @@ export function usePeer(userName: string) {
 
         peer.on('connection', (conn) => {
             handleConnection(conn)
+        })
+
+        peer.on('error', (err) => {
+            // If ID is taken, would theoretically need to retry, but probability is low for <1000 users
+            console.error("Peer error:", err)
         })
 
         return () => {
@@ -41,8 +61,6 @@ export function usePeer(userName: string) {
         conn.on('data', (data: any) => {
             if (data.type === 'handshake') {
                 setPartnerName(data.name)
-                // If we received a handshake, we are connected. 
-                // We might also want to set partnerId if not already set.
                 if (conn.peer) setPartnerId(conn.peer)
             }
             setMessage(data)
@@ -57,6 +75,12 @@ export function usePeer(userName: string) {
             console.error('Connection error:', err)
             setConnected(false)
         })
+    }
+
+    // Helper to connect using just the short code
+    const connectToCase = (code: string) => {
+        const fullId = `cm-${code}`
+        connect(fullId)
     }
 
     const connect = (targetId: string) => {
@@ -79,12 +103,14 @@ export function usePeer(userName: string) {
     }
 
     return {
-        peerId,
+        peerId,       // The full ID (cm-123456)
+        caseNumber,   // The short PIN (123456)
         partnerId,
         partnerName,
         connected,
         message,
         connect,
+        connectToCase, // New function for PIN connection
         send
     }
 }
