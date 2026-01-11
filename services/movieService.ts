@@ -2,11 +2,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Movie, SessionConfig } from "../types";
 
+const MOVIE_POSTERS = [
+  "https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=800",
+  "https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=800",
+  "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?q=80&w=800",
+  "https://images.unsplash.com/photo-1542204172-3c1399430260?q=80&w=800",
+  "https://images.unsplash.com/photo-1478720568477-152d9b164e26?q=80&w=800"
+];
+
 export const fetchMovies = async (config: SessionConfig): Promise<Movie[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const prompt = `Gere uma lista de 12 filmes REAIS de cinema que combinem com a vibe "${config.vibe}" e tenham cerca de ${config.maxTime} minutos.
-  Retorne um array JSON estrito com: title, year (number), rating (number de 0 a 10), genres (array), description (curta), duration (number), youtubeId (ID do trailer).`;
+  const prompt = `Gere uma lista de 15 filmes REAIS de Hollywood para a vibe "${config.vibe}".
+  A saída deve ser um JSON estrito.
+  Campos obrigatórios: title (string), year (number), rating (number de 0 a 10), genres (array de strings), description (max 120 chars), duration (number em min), youtubeId (string do ID do trailer).`;
 
   try {
     const response = await ai.models.generateContent({
@@ -36,12 +45,12 @@ export const fetchMovies = async (config: SessionConfig): Promise<Movie[]> => {
     const data = JSON.parse(response.text || "[]");
     return data.map((m: any, i: number) => ({
       ...m,
-      id: `m-${i}-${Date.now()}`,
-      compatibility: Math.floor(Math.random() * 15) + 85,
-      imageUrl: `https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=800&auto=format&fit=crop` // Imagem base de cinema de alta qualidade
+      id: `movie-${i}-${Date.now()}`,
+      compatibility: Math.floor(Math.random() * 20) + 80,
+      imageUrl: MOVIE_POSTERS[i % MOVIE_POSTERS.length]
     }));
   } catch (e) {
-    console.error("Gemini Error:", e);
+    console.error("Erro na busca de filmes:", e);
     return [];
   }
 };
