@@ -34,54 +34,66 @@ const App: React.FC = () => {
   const peerRef = useRef<any>(null);
   const connRef = useRef<any>(null);
 
-  // Inicialização Segura do PeerJS
   useEffect(() => {
-    const saved = localStorage.getItem('cm_user_v2');
-    if (saved) setProfile(JSON.parse(saved));
+    // Tenta recuperar perfil salvo
+    try {
+      const saved = localStorage.getItem('cm_user_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setProfile(parsed);
+      }
+    } catch (e) {
+      console.error("Erro ao carregar perfil:", e);
+    }
 
-    const initPeer = (retries = 5) => {
+    const startApp = () => {
+      const saved = localStorage.getItem('cm_user_v2');
+      setPhase(saved ? 'pairing' : 'profile_setup');
+    };
+
+    // Inicialização do PeerJS com Timeout de Segurança
+    const initPeer = (retries = 3) => {
       if (typeof Peer === 'undefined') {
         if (retries > 0) {
-          console.warn(`PeerJS não carregado. Tentando novamente... (${retries})`);
           setTimeout(() => initPeer(retries - 1), 1000);
         } else {
-          console.error("PeerJS falhou ao carregar após várias tentativas.");
-          // Mesmo sem Peer, permitimos avançar para o Modo Solo
-          setTimeout(() => advancePhase(saved), 1000);
+          console.warn("PeerJS não disponível. Rodando em modo solo.");
+          startApp();
         }
         return;
       }
 
-      const peer = new Peer();
-      peerRef.current = peer;
+      try {
+        const peer = new Peer();
+        peerRef.current = peer;
 
-      peer.on('open', (id: string) => {
-        setPeerId(id);
-        setConnStatus('waiting');
-      });
+        peer.on('open', (id: string) => {
+          setPeerId(id);
+          setConnStatus('waiting');
+        });
 
-      peer.on('connection', (conn: any) => {
-        connRef.current = conn;
-        setupConnection(conn);
-      });
+        peer.on('connection', (conn: any) => {
+          connRef.current = conn;
+          setupConnection(conn);
+        });
 
-      peer.on('error', (err: any) => {
-        console.error("PeerJS Connection Error:", err);
-      });
+        peer.on('error', (err: any) => {
+          console.error("Erro no PeerJS:", err);
+        });
 
-      advancePhase(saved);
+        // Avança após inicializar (ou tentar)
+        startApp();
+      } catch (e) {
+        console.error("Falha ao criar instância Peer:", e);
+        startApp();
+      }
     };
 
-    const advancePhase = (hasProfile: string | null) => {
-      setTimeout(() => {
-        if (!hasProfile) setPhase('profile_setup');
-        else setPhase('pairing');
-      }, 1500);
-    };
-
-    initPeer();
+    // Delay para a Splash Screen ser visível
+    const timer = setTimeout(initPeer, 1500);
 
     return () => {
+      clearTimeout(timer);
       if (peerRef.current) peerRef.current.destroy();
     };
   }, []);
@@ -113,26 +125,36 @@ const App: React.FC = () => {
   const connectToPartner = () => {
     if (!targetId || !peerRef.current) return;
     setIsConnecting(true);
-    const conn = peerRef.current.connect(targetId);
-    connRef.current = conn;
-    setupConnection(conn);
+    try {
+      const conn = peerRef.current.connect(targetId);
+      connRef.current = conn;
+      setupConnection(conn);
+    } catch (e) {
+      console.error("Falha ao conectar:", e);
+      setIsConnecting(false);
+    }
   };
 
   const startDiscovery = async (vibe: string) => {
     setLoading(true);
-    const config: SessionConfig = { vibe, maxTime: 120 };
-    const fetched = await fetchMovies(config);
-    setMovies(fetched);
-    
-    if (connRef.current) {
-      connRef.current.send({ type: 'START_SESSION', movies: fetched, config });
+    try {
+      const config: SessionConfig = { vibe, maxTime: 120 };
+      const fetched = await fetchMovies(config);
+      setMovies(fetched);
+      
+      if (connRef.current && connStatus === 'connected') {
+        connRef.current.send({ type: 'START_SESSION', movies: fetched, config });
+      }
+      setPhase('discovery');
+    } catch (e) {
+      console.error("Falha ao iniciar descoberta:", e);
+    } finally {
+      setLoading(false);
     }
-    setPhase('discovery');
-    setLoading(false);
   };
 
   const handleSwipe = useCallback((direction: SwipeDirection) => {
-    if (currentIndex >= movies.length) return;
+    if (!movies[currentIndex]) return;
     const currentMovie = movies[currentIndex];
 
     if (direction === SwipeDirection.RIGHT) {
@@ -142,18 +164,18 @@ const App: React.FC = () => {
       }
     }
 
-    if (connRef.current) {
+    if (connRef.current && connStatus === 'connected') {
       connRef.current.send({ type: 'SWIPE_UPDATE', movieId: currentMovie.id, direction });
     }
 
     if (currentIndex + 1 >= movies.length) setPhase('session_end');
     else setCurrentIndex(prev => prev + 1);
-  }, [movies, currentIndex, partnerLikes]);
+  }, [movies, currentIndex, partnerLikes, connStatus]);
 
   return (
     <div className="h-screen bg-slate-950 text-white flex flex-col overflow-hidden font-sans select-none">
       
-      {/* HUD de Status */}
+      {/* Header */}
       <header className="p-6 flex justify-between items-center z-[100] bg-gradient-to-b from-slate-950 to-transparent">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-rose-500 rounded-2xl flex items-center justify-center rotate-12 shadow-lg shadow-rose-500/20">
@@ -185,27 +207,24 @@ const App: React.FC = () => {
 
         {phase === 'profile_setup' && (
           <div className="w-full animate-in slide-in-from-bottom-12 duration-700">
-            <h2 className="text-5xl font-black italic uppercase tracking-tighter mb-8 leading-tight text-balance">Escolha sua<br/><span className="text-rose-500">Persona.</span></h2>
-            
+            <h2 className="text-5xl font-black italic uppercase tracking-tighter mb-8 leading-tight">Escolha sua<br/><span className="text-rose-500">Persona.</span></h2>
             <div className="grid grid-cols-3 gap-4 mb-10">
               {AVATARS.map(a => (
                 <button 
                   key={a}
                   onClick={() => setProfile({ name: profile?.name || '', avatar: a })}
-                  className={`aspect-square rounded-[1.5rem] border-4 transition-all overflow-hidden bg-slate-900 ${profile?.avatar === a ? 'border-rose-500 scale-105 shadow-xl' : 'border-white/5 opacity-40 hover:opacity-80'}`}
+                  className={`aspect-square rounded-[1.5rem] border-4 transition-all overflow-hidden bg-slate-900 ${profile?.avatar === a ? 'border-rose-500 scale-105 shadow-xl' : 'border-white/5 opacity-40'}`}
                 >
                   <img src={a} className="w-full h-full" alt="avatar" />
                 </button>
               ))}
             </div>
-
             <input 
               value={profile?.name || ''}
               onChange={e => setProfile(p => ({ avatar: p?.avatar || AVATARS[0], name: e.target.value }))}
               placeholder="Digite seu nome..."
-              className="w-full bg-white/5 border border-white/10 p-7 rounded-3xl mb-8 font-black uppercase text-xs outline-none focus:border-rose-500 transition-all focus:bg-white/10"
+              className="w-full bg-white/5 border border-white/10 p-7 rounded-3xl mb-8 font-black uppercase text-xs outline-none focus:border-rose-500 transition-all"
             />
-            
             <button 
               onClick={() => {
                 if (profile?.name) {
@@ -214,7 +233,7 @@ const App: React.FC = () => {
                 }
               }}
               disabled={!profile?.name}
-              className="w-full bg-rose-500 py-7 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-2xl active:scale-95 transition-all disabled:opacity-20"
+              className="w-full bg-rose-500 py-7 rounded-[2rem] font-black uppercase tracking-widest text-xs active:scale-95 transition-all disabled:opacity-20"
             >
               Confirmar
             </button>
@@ -224,38 +243,34 @@ const App: React.FC = () => {
         {phase === 'pairing' && (
           <div className="w-full text-center animate-in fade-in duration-700">
             <h2 className="text-4xl font-black italic uppercase tracking-tighter mb-12">Conectar<br/><span className="text-rose-500">Parceiro(a)</span></h2>
-            
             <div className="bg-slate-900/50 border border-white/5 p-8 rounded-[2.5rem] mb-10 shadow-2xl backdrop-blur-xl">
-              <span className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em] block mb-4">Seu Código CineMatch</span>
+              <span className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em] block mb-4">Seu Código</span>
               <div className="font-mono text-rose-500 font-bold text-2xl mb-8 tracking-widest break-all">
-                {peerId || (typeof Peer === 'undefined' ? 'Indisponível' : 'Gerando...')}
+                {peerId || 'Gerando...'}
               </div>
               <button 
                 onClick={() => { if(peerId) { navigator.clipboard.writeText(peerId); alert("ID Copiado!"); } }}
-                className="w-full bg-white/5 hover:bg-white/10 py-4 rounded-2xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-3 active:scale-95"
+                className="w-full bg-white/5 py-4 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-3 active:scale-95"
               >
                 <i className="fas fa-copy"></i> Copiar Código
               </button>
             </div>
-
             <div className="space-y-4">
               <input 
                 value={targetId}
                 onChange={e => setTargetId(e.target.value)}
                 placeholder="Código do parceiro..."
-                className="w-full bg-white/5 border border-white/10 p-6 rounded-2xl font-mono text-xs text-center uppercase outline-none focus:border-rose-500"
+                className="w-full bg-white/5 border border-white/10 p-6 rounded-2xl font-mono text-xs text-center uppercase outline-none"
               />
               <button 
                 onClick={connectToPartner}
                 disabled={isConnecting || !targetId}
-                className="w-full bg-white text-black py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-40"
+                className="w-full bg-white text-black py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] active:scale-95 transition-all disabled:opacity-40"
               >
-                {isConnecting ? <i className="fas fa-spinner animate-spin"></i> : <i className="fas fa-link"></i>}
                 {isConnecting ? 'Pareando...' : 'Parear Agora'}
               </button>
-              
               <div className="pt-8">
-                 <button onClick={() => setPhase('vibe_check')} className="text-[9px] font-black uppercase text-slate-600 tracking-[0.5em] hover:text-white transition-all">Modo Solo</button>
+                 <button onClick={() => setPhase('vibe_check')} className="text-[9px] font-black uppercase text-slate-600 tracking-[0.5em] hover:text-white">Modo Solo</button>
               </div>
             </div>
           </div>
@@ -310,8 +325,8 @@ const App: React.FC = () => {
                 ) : (
                   <div className="text-center">
                     <i className="fas fa-exclamation-triangle text-4xl text-rose-500 mb-6"></i>
-                    <p className="font-black uppercase text-xs">Erro ao buscar filmes.</p>
-                    <button onClick={() => setPhase('vibe_check')} className="mt-6 bg-white text-black px-8 py-3 rounded-full font-black uppercase text-[10px]">Tentar Outra Vibe</button>
+                    <p className="font-black uppercase text-xs">Nenhum filme encontrado.</p>
+                    <button onClick={() => setPhase('vibe_check')} className="mt-6 bg-white text-black px-8 py-3 rounded-full font-black uppercase text-[10px]">Voltar</button>
                   </div>
                 )}
               </div>
@@ -324,23 +339,12 @@ const App: React.FC = () => {
       {/* Match Ceremony */}
       {match && (
         <div className="fixed inset-0 z-[1000] bg-slate-950/98 backdrop-blur-3xl flex flex-col items-center justify-center p-10 text-center animate-in zoom-in duration-500">
-           <div className="absolute inset-0 bg-rose-500/20 blur-[150px] animate-pulse"></div>
            <div className="relative mb-12 animate-bounce">
-              <img src={match.imageUrl} className="w-60 h-84 object-cover rounded-[3rem] border-4 border-rose-500 shadow-[0_0_80px_rgba(244,63,94,0.5)] relative z-10" alt="" />
+              <img src={match.imageUrl} className="w-60 h-84 object-cover rounded-[3rem] border-4 border-rose-500 shadow-2xl relative z-10" alt="" />
            </div>
            <h2 className="text-7xl font-black italic uppercase tracking-tighter leading-none mb-4">MATCH!</h2>
-           <p className="text-slate-400 font-bold uppercase tracking-[0.8em] text-[10px] mb-12">Vocês combinaram!</p>
-           <h3 className="text-2xl font-black uppercase italic mb-16 text-balance">{match.title}</h3>
-           <button onClick={() => setMatch(null)} className="w-full max-w-xs bg-rose-500 py-7 rounded-full font-black uppercase tracking-widest text-xs shadow-2xl active:scale-95 transition-all">Continuar Descobrindo</button>
-        </div>
-      )}
-
-      {phase === 'session_end' && (
-        <div className="fixed inset-0 z-[500] bg-slate-950 flex flex-col items-center justify-center p-12 text-center animate-in fade-in">
-           <i className="fas fa-popcorn text-7xl text-slate-800 mb-10"></i>
-           <h2 className="text-4xl font-black uppercase italic mb-6 leading-tight">Chegamos ao fim<br/>da lista.</h2>
-           <p className="text-slate-500 text-xs font-bold mb-14 leading-relaxed uppercase tracking-[0.4em]">Nenhum match por enquanto.<br/>Tente uma nova vibe!</p>
-           <button onClick={() => window.location.reload()} className="bg-white text-black px-14 py-6 rounded-full font-black uppercase text-[11px] tracking-widest active:scale-95 transition-all shadow-2xl">Reiniciar Sessão</button>
+           <h3 className="text-2xl font-black uppercase italic mb-16">{match.title}</h3>
+           <button onClick={() => setMatch(null)} className="w-full max-w-xs bg-rose-500 py-7 rounded-full font-black uppercase tracking-widest text-xs active:scale-95 transition-all">Continuar</button>
         </div>
       )}
     </div>

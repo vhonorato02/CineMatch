@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Movie, SessionConfig } from "../types";
+import { Movie, SessionConfig } from "../types.ts";
 
 const MOVIE_POSTERS = [
   "https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=800",
@@ -11,7 +11,15 @@ const MOVIE_POSTERS = [
 ];
 
 export const fetchMovies = async (config: SessionConfig): Promise<Movie[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Verificação segura do process.env para evitar crash no GitHub Pages
+  const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
+  
+  if (!apiKey) {
+    console.warn("API Key não encontrada. Verifique as configurações do ambiente.");
+    return [];
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   
   const prompt = `Gere uma lista de 15 filmes REAIS de Hollywood para a vibe "${config.vibe}".
   A saída deve ser um JSON estrito.
@@ -42,7 +50,8 @@ export const fetchMovies = async (config: SessionConfig): Promise<Movie[]> => {
       }
     });
 
-    const data = JSON.parse(response.text || "[]");
+    const text = response.text || "[]";
+    const data = JSON.parse(text);
     return data.map((m: any, i: number) => ({
       ...m,
       id: `movie-${i}-${Date.now()}`,
