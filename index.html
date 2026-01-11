@@ -16,6 +16,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,700;0,800;1,800&display=swap');
         
@@ -51,22 +52,33 @@
             box-sizing: border-box;
         }
 
-        #error-display {
+        #error-overlay {
             position: fixed;
-            bottom: 0;
+            top: 0;
             left: 0;
             right: 0;
-            background: rgba(255,0,0,0.9);
-            color: white;
-            font-size: 10px;
-            padding: 10px;
-            z-index: 9999;
+            bottom: 0;
+            background: rgba(2, 6, 23, 0.95);
+            color: #f43f5e;
+            padding: 20px;
             display: none;
-            word-break: break-all;
+            z-index: 9999;
+            overflow-y: auto;
             font-family: monospace;
+            font-size: 12px;
         }
     </style>
-<script type="importmap">
+
+    <!-- CRITICAL: Fix for "process is not defined" error in static environments like GitHub Pages -->
+    <script>
+        window.process = {
+            env: {
+                API_KEY: "" // O valor real será injetado pelo ambiente ou você pode colocar aqui para teste local (CUIDADO)
+            }
+        };
+    </script>
+
+    <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@19.0.0",
@@ -78,20 +90,23 @@
   }
 }
 </script>
-<script>
-    window.onerror = function(msg, url, lineNo, columnNo, error) {
-        const display = document.getElementById('error-display');
-        if (display) {
-            display.style.display = 'block';
-            display.innerHTML = 'Error: ' + msg + ' at ' + lineNo + ':' + columnNo;
-        }
-        return false;
-    };
-</script>
+
+    <script>
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            const overlay = document.getElementById('error-overlay');
+            if (overlay) {
+                overlay.style.display = 'block';
+                overlay.innerHTML += `<div><strong>Error:</strong> ${msg}<br><small>${url}:${lineNo}</small></div><br>`;
+            }
+            return false;
+        };
+    </script>
 </head>
 <body>
     <div id="root"></div>
-    <div id="error-display"></div>
+    <div id="error-overlay">
+        <h2 style="color: white; margin-bottom: 20px;">CineMatch Crash Log:</h2>
+    </div>
     <script type="module" src="./index.tsx"></script>
 </body>
 </html>

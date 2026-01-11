@@ -11,19 +11,19 @@ const MOVIE_POSTERS = [
 ];
 
 export const fetchMovies = async (config: SessionConfig): Promise<Movie[]> => {
-  // Verificação segura do process.env para evitar crash no GitHub Pages
-  const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
+  // Verificação ultra-segura da API Key
+  const apiKey = (window as any).process?.env?.API_KEY || "";
   
   if (!apiKey) {
-    console.warn("API Key não encontrada. Verifique as configurações do ambiente.");
+    console.error("ERRO: API_KEY não configurada. O app não conseguirá gerar filmes.");
     return [];
   }
 
   const ai = new GoogleGenAI({ apiKey });
   
-  const prompt = `Gere uma lista de 15 filmes REAIS de Hollywood para a vibe "${config.vibe}".
-  A saída deve ser um JSON estrito.
-  Campos obrigatórios: title (string), year (number), rating (number de 0 a 10), genres (array de strings), description (max 120 chars), duration (number em min), youtubeId (string do ID do trailer).`;
+  const prompt = `Gere uma lista de 10 filmes REAIS de Hollywood para a vibe "${config.vibe}".
+  A saída deve ser um JSON estrito (ARRAY).
+  Campos obrigatórios: title (string), year (number), rating (number de 0 a 10), genres (array), description (string), duration (number), youtubeId (string).`;
 
   try {
     const response = await ai.models.generateContent({
@@ -50,7 +50,9 @@ export const fetchMovies = async (config: SessionConfig): Promise<Movie[]> => {
       }
     });
 
-    const text = response.text || "[]";
+    const text = response.text;
+    if (!text) return [];
+    
     const data = JSON.parse(text);
     return data.map((m: any, i: number) => ({
       ...m,
@@ -59,7 +61,7 @@ export const fetchMovies = async (config: SessionConfig): Promise<Movie[]> => {
       imageUrl: MOVIE_POSTERS[i % MOVIE_POSTERS.length]
     }));
   } catch (e) {
-    console.error("Erro na busca de filmes:", e);
+    console.error("Erro ao buscar filmes via Gemini:", e);
     return [];
   }
 };
