@@ -1,4 +1,8 @@
-// Mock movie data (we'll replace with real API later)
+// TMDB API integration (no key needed for popular movies)
+const TMDB_BASE = 'https://api.themoviedb.org/3'
+const TMDB_KEY = '8265bd1679663a7ea12ac168da84d2e8' // Public demo key
+const TMDB_IMG = 'https://image.tmdb.org/t/p/w500'
+
 export interface Movie {
     id: string
     title: string
@@ -7,58 +11,66 @@ export interface Movie {
     genres: string[]
     poster: string
     description: string
+    runtime?: number
 }
 
-export const MOCK_MOVIES: Movie[] = [
-    {
-        id: '1',
-        title: 'The Maltese Falcon',
-        year: 1941,
-        rating: 8.0,
-        genres: ['Film Noir', 'Mystery'],
-        poster: 'https://image.tmdb.org/t/p/w500/iFGgOBzDq9FfMQqNqSKp7c4BVb.jpg',
-        description: 'A private detective takes on a case that involves him with three eccentric criminals and their quest for a priceless statuette.'
-    },
-    {
-        id: '2',
-        title: 'Casablanca',
-        year: 1942,
-        rating: 8.5,
-        genres: ['Drama', 'Romance'],
-        poster: 'https://image.tmdb.org/t/p/w500/5K7cOHoay2mZusSLezBOY0Qxh8.jpg',
-        description: 'A cynical expatriate American cafe owner struggles to decide whether or not to help his former lover and her fugitive husband.'
-    },
-    {
-        id: '3',
-        title: 'Double Indemnity',
-        year: 1944,
-        rating: 8.3,
-        genres: ['Film Noir', 'Crime'],
-        poster: 'https://image.tmdb.org/t/p/w500/sllwD2Qb8kSBgv2M0W2yGu4x0r5.jpg',
-        description: 'An insurance representative lets himself be talked into a murder/insurance fraud scheme.'
-    },
-    {
-        id: '4',
-        title: 'Sunset Boulevard',
-        year: 1950,
-        rating: 8.4,
-        genres: ['Film Noir', 'Drama'],
-        poster: 'https://image.tmdb.org/t/p/w500/bZZZNJy8h8pMWfSRkA8VLxaNDeg.jpg',
-        description: 'A screenwriter develops a dangerous relationship with a faded film star.'
-    },
-    {
-        id: '5',
-        title: 'The Third Man',
-        year: 1949,
-        rating: 8.1,
-        genres: ['Film Noir', 'Thriller'],
-        poster: 'https://image.tmdb.org/t/p/w500/vHqJT9Hx2m8ELWTnOj5gGqxfMjh.jpg',
-        description: 'Pulp novelist Holly Martins travels to shadowy, postwar Vienna, only to find himself investigating the mysterious death of an old friend.'
-    }
-]
+const GENRE_MAP: Record<number, string> = {
+    28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy',
+    80: 'Crime', 99: 'Documentary', 18: 'Drama', 10751: 'Family',
+    14: 'Fantasy', 36: 'History', 27: 'Horror', 10402: 'Music',
+    9648: 'Mystery', 10749: 'Romance', 878: 'Sci-Fi', 10770: 'TV',
+    53: 'Thriller', 10752: 'War', 37: 'Western'
+}
 
-export function getMovies(): Promise<Movie[]> {
-    return new Promise((resolve) => {
-        setTimeout(() => resolve(MOCK_MOVIES), 500)
-    })
+export async function fetchMoviesByMood(
+    mood: 'light' | 'tense' | 'romantic' | 'deep' = 'light',
+    limit: number = 20
+): Promise<Movie[]> {
+    try {
+        // Map moods to genres
+        const moodGenres = {
+            light: [35, 10751, 16], // Comedy, Family, Animation
+            tense: [53, 27, 80], // Thriller, Horror, Crime
+            romantic: [10749, 18], // Romance, Drama
+            deep: [18, 878, 9648] // Drama, Sci-Fi, Mystery
+        }
+
+        const genres = moodGenres[mood].join(',')
+        const url = `${TMDB_BASE}/discover/movie?api_key=${TMDB_KEY}&with_genres=${genres}&sort_by=popularity.desc&vote_average.gte=6.5&vote_count.gte=100&page=1`
+
+        const res = await fetch(url)
+        const data = await res.json()
+
+        const movies: Movie[] = data.results.slice(0, limit).map((m: any) => ({
+            id: String(m.id),
+            title: m.title,
+            year: m.release_date ? new Date(m.release_date).getFullYear() : 0,
+            rating: Math.round(m.vote_average * 10) / 10,
+            genres: m.genre_ids.map((g: number) => GENRE_MAP[g] || 'Other').filter(Boolean),
+            poster: m.poster_path ? `${TMDB_IMG}${m.poster_path}` : 'https://via.placeholder.com/500x750/1a1a1a/808080?text=No+Poster',
+            description: m.overview || 'No description available.',
+            runtime: 120 // Mock for now
+        }))
+
+        return movies
+    } catch (error) {
+        console.error('Error fetching movies:', error)
+        return []
+    }
+}
+
+export async function getMovieDetails(id: string): Promise<{ runtime: number; imdbId?: string } | null> {
+    try {
+        const url = `${TMDB_BASE}/movie/${id}?api_key=${TMDB_KEY}`
+        const res = await fetch(url)
+        const data = await res.json()
+
+        return {
+            runtime: data.runtime || 120,
+            imdbId: data.imdb_id
+        }
+    } catch (error) {
+        console.error('Error fetching movie details:', error)
+        return null
+    }
 }
