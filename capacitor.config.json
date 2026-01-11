@@ -1,0 +1,6 @@
+{
+    "appId": "com.zevictor.cinematch",
+    "appName": "CineMatch",
+    "webDir": "dist",
+    "bundledWebRuntime": false
+}
