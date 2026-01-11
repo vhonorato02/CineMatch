@@ -12,6 +12,7 @@ export function usePeer(userName: string) {
     const connRef = useRef<any>(null)
 
     useEffect(() => {
+        // Initialize Peer with a random ID
         const peer = new Peer()
         peerRef.current = peer
 
@@ -20,25 +21,7 @@ export function usePeer(userName: string) {
         })
 
         peer.on('connection', (conn) => {
-            connRef.current = conn
-
-            conn.on('open', () => {
-                setConnected(true)
-                conn.send({ type: 'handshake', name: userName })
-            })
-
-            conn.on('data', (data: any) => {
-                if (data.type === 'handshake') {
-                    setPartnerName(data.name)
-                    setPartnerId(conn.peer)
-                }
-                setMessage(data)
-            })
-
-            conn.on('close', () => {
-                setConnected(false)
-                setPartnerName('')
-            })
+            handleConnection(conn)
         })
 
         return () => {
@@ -46,21 +29,21 @@ export function usePeer(userName: string) {
         }
     }, [userName])
 
-    const connect = (targetId: string) => {
-        if (!peerRef.current) return
-
-        const conn = peerRef.current.connect(targetId)
+    const handleConnection = (conn: any) => {
         connRef.current = conn
 
         conn.on('open', () => {
             setConnected(true)
-            setPartnerId(targetId)
+            // Send handshake immediately
             conn.send({ type: 'handshake', name: userName })
         })
 
         conn.on('data', (data: any) => {
             if (data.type === 'handshake') {
                 setPartnerName(data.name)
+                // If we received a handshake, we are connected. 
+                // We might also want to set partnerId if not already set.
+                if (conn.peer) setPartnerId(conn.peer)
             }
             setMessage(data)
         })
@@ -69,6 +52,24 @@ export function usePeer(userName: string) {
             setConnected(false)
             setPartnerName('')
         })
+
+        conn.on('error', (err: any) => {
+            console.error('Connection error:', err)
+            setConnected(false)
+        })
+    }
+
+    const connect = (targetId: string) => {
+        if (!peerRef.current) return
+
+        // Close existing connection if any
+        if (connRef.current) {
+            connRef.current.close()
+        }
+
+        const conn = peerRef.current.connect(targetId)
+        handleConnection(conn)
+        setPartnerId(targetId)
     }
 
     const send = (data: any) => {
