@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Movie, SwipeDirection, SessionPhase, SessionConfig, P2PMessage, UserProfile } from './types';
-import { fetchMovies } from './services/movieService';
-import Card from './components/Card';
+import { Movie, SwipeDirection, SessionPhase, SessionConfig, P2PMessage, UserProfile } from './types.ts';
+import { fetchMovies } from './services/movieService.ts';
+import Card from './components/Card.tsx';
 
 declare var Peer: any;
 
@@ -34,36 +34,55 @@ const App: React.FC = () => {
   const peerRef = useRef<any>(null);
   const connRef = useRef<any>(null);
 
-  // Inicialização Robusta
+  // Inicialização Segura do PeerJS
   useEffect(() => {
     const saved = localStorage.getItem('cm_user_v2');
     if (saved) setProfile(JSON.parse(saved));
 
-    const peer = new Peer();
-    peerRef.current = peer;
+    const initPeer = (retries = 5) => {
+      if (typeof Peer === 'undefined') {
+        if (retries > 0) {
+          console.warn(`PeerJS não carregado. Tentando novamente... (${retries})`);
+          setTimeout(() => initPeer(retries - 1), 1000);
+        } else {
+          console.error("PeerJS falhou ao carregar após várias tentativas.");
+          // Mesmo sem Peer, permitimos avançar para o Modo Solo
+          setTimeout(() => advancePhase(saved), 1000);
+        }
+        return;
+      }
 
-    peer.on('open', (id: string) => {
-      setPeerId(id);
-      setConnStatus('waiting');
-    });
+      const peer = new Peer();
+      peerRef.current = peer;
 
-    peer.on('connection', (conn: any) => {
-      connRef.current = conn;
-      setupConnection(conn);
-    });
+      peer.on('open', (id: string) => {
+        setPeerId(id);
+        setConnStatus('waiting');
+      });
 
-    peer.on('error', (err: any) => {
-      console.error("PeerJS Error:", err);
-    });
+      peer.on('connection', (conn: any) => {
+        connRef.current = conn;
+        setupConnection(conn);
+      });
 
-    const timer = setTimeout(() => {
-      if (!saved) setPhase('profile_setup');
-      else setPhase('pairing');
-    }, 2500);
+      peer.on('error', (err: any) => {
+        console.error("PeerJS Connection Error:", err);
+      });
+
+      advancePhase(saved);
+    };
+
+    const advancePhase = (hasProfile: string | null) => {
+      setTimeout(() => {
+        if (!hasProfile) setPhase('profile_setup');
+        else setPhase('pairing');
+      }, 1500);
+    };
+
+    initPeer();
 
     return () => {
-      clearTimeout(timer);
-      peer.destroy();
+      if (peerRef.current) peerRef.current.destroy();
     };
   }, []);
 
@@ -113,8 +132,8 @@ const App: React.FC = () => {
   };
 
   const handleSwipe = useCallback((direction: SwipeDirection) => {
+    if (currentIndex >= movies.length) return;
     const currentMovie = movies[currentIndex];
-    if (!currentMovie) return;
 
     if (direction === SwipeDirection.RIGHT) {
       setMyLikes(prev => [...prev, currentMovie.id]);
@@ -166,7 +185,7 @@ const App: React.FC = () => {
 
         {phase === 'profile_setup' && (
           <div className="w-full animate-in slide-in-from-bottom-12 duration-700">
-            <h2 className="text-5xl font-black italic uppercase tracking-tighter mb-8 leading-tight">Escolha sua<br/><span className="text-rose-500">Persona.</span></h2>
+            <h2 className="text-5xl font-black italic uppercase tracking-tighter mb-8 leading-tight text-balance">Escolha sua<br/><span className="text-rose-500">Persona.</span></h2>
             
             <div className="grid grid-cols-3 gap-4 mb-10">
               {AVATARS.map(a => (
@@ -208,10 +227,12 @@ const App: React.FC = () => {
             
             <div className="bg-slate-900/50 border border-white/5 p-8 rounded-[2.5rem] mb-10 shadow-2xl backdrop-blur-xl">
               <span className="text-[10px] font-black uppercase text-slate-500 tracking-[0.3em] block mb-4">Seu Código CineMatch</span>
-              <div className="font-mono text-rose-500 font-bold text-2xl mb-8 tracking-widest">{peerId || 'Gerando...'}</div>
+              <div className="font-mono text-rose-500 font-bold text-2xl mb-8 tracking-widest break-all">
+                {peerId || (typeof Peer === 'undefined' ? 'Indisponível' : 'Gerando...')}
+              </div>
               <button 
-                onClick={() => { navigator.clipboard.writeText(peerId); alert("ID Copiado!"); }}
-                className="w-full bg-white/5 hover:bg-white/10 py-4 rounded-2xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-3"
+                onClick={() => { if(peerId) { navigator.clipboard.writeText(peerId); alert("ID Copiado!"); } }}
+                className="w-full bg-white/5 hover:bg-white/10 py-4 rounded-2xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-3 active:scale-95"
               >
                 <i className="fas fa-copy"></i> Copiar Código
               </button>
@@ -241,9 +262,9 @@ const App: React.FC = () => {
         )}
 
         {phase === 'vibe_check' && (
-          <div className="w-full animate-in slide-in-from-right duration-500">
+          <div className="w-full animate-in slide-in-from-right duration-500 overflow-y-auto no-scrollbar max-h-[70vh]">
             <h2 className="text-5xl font-black italic uppercase tracking-tighter mb-10 leading-none">Vibe da<br/><span className="text-rose-500">Noite.</span></h2>
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-4 pb-10">
               {[
                 { id: 'romance', name: 'Noite Romântica', icon: '🕯️', color: 'from-pink-600' },
                 { id: 'horror', name: 'Terror & Susto', icon: '💀', color: 'from-purple-900' },
@@ -255,7 +276,7 @@ const App: React.FC = () => {
                   onClick={() => startDiscovery(v.name)}
                   className={`bg-gradient-to-r ${v.color} to-slate-900/40 border border-white/10 p-8 rounded-[2rem] flex items-center justify-between group active:scale-95 transition-all shadow-xl`}
                 >
-                  <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-6 text-left">
                     <span className="text-3xl">{v.icon}</span>
                     <span className="font-black uppercase tracking-widest text-xs">{v.name}</span>
                   </div>
@@ -274,16 +295,18 @@ const App: React.FC = () => {
                 <p className="font-black uppercase tracking-widest text-[10px] text-rose-500 animate-pulse">CineAI Gerando Opções...</p>
               </div>
             ) : (
-              <div className="relative w-full h-full flex items-center justify-center">
+              <div className="relative w-full h-[70vh] flex items-center justify-center">
                 {movies.length > 0 ? (
-                  movies.slice(currentIndex, currentIndex + 2).reverse().map((m) => (
-                    <Card 
-                      key={m.id}
-                      movie={m}
-                      isActive={currentIndex === movies.findIndex(movie => movie.id === m.id)}
-                      onSwipe={handleSwipe}
-                    />
-                  ))
+                  movies.map((m, idx) => (
+                    idx >= currentIndex && idx <= currentIndex + 1 && (
+                      <Card 
+                        key={m.id}
+                        movie={m}
+                        isActive={currentIndex === idx}
+                        onSwipe={handleSwipe}
+                      />
+                    )
+                  )).reverse()
                 ) : (
                   <div className="text-center">
                     <i className="fas fa-exclamation-triangle text-4xl text-rose-500 mb-6"></i>
@@ -307,7 +330,7 @@ const App: React.FC = () => {
            </div>
            <h2 className="text-7xl font-black italic uppercase tracking-tighter leading-none mb-4">MATCH!</h2>
            <p className="text-slate-400 font-bold uppercase tracking-[0.8em] text-[10px] mb-12">Vocês combinaram!</p>
-           <h3 className="text-2xl font-black uppercase italic mb-16">{match.title}</h3>
+           <h3 className="text-2xl font-black uppercase italic mb-16 text-balance">{match.title}</h3>
            <button onClick={() => setMatch(null)} className="w-full max-w-xs bg-rose-500 py-7 rounded-full font-black uppercase tracking-widest text-xs shadow-2xl active:scale-95 transition-all">Continuar Descobrindo</button>
         </div>
       )}
