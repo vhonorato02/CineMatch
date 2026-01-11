@@ -13,10 +13,15 @@
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3163/3163478.png">
     
     <title>CineMatch</title>
+    
+    <!-- Scripts Externos -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- COMPILADOR BABEL: Essencial para rodar .tsx no GitHub Pages sem build -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,700;0,800;1,800&display=swap');
         
@@ -42,38 +47,28 @@
             animation: progress 2s ease-in-out infinite;
         }
 
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        
-        * {
-            -webkit-user-select: none;
-            user-select: none;
-            box-sizing: border-box;
-        }
-
         #error-overlay {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(2, 6, 23, 0.95);
+            background: rgba(2, 6, 23, 0.98);
             color: #f43f5e;
-            padding: 20px;
+            padding: 30px;
             display: none;
             z-index: 9999;
             overflow-y: auto;
             font-family: monospace;
-            font-size: 12px;
+            font-size: 14px;
         }
     </style>
 
-    <!-- CRITICAL: Fix for "process is not defined" error in static environments like GitHub Pages -->
+    <!-- Simulação do ambiente Node/Vite para o navegador -->
     <script>
         window.process = {
             env: {
-                API_KEY: "" // O valor real será injetado pelo ambiente ou você pode colocar aqui para teste local (CUIDADO)
+                API_KEY: "" // A chave será usada se disponível
             }
         };
     </script>
@@ -96,7 +91,7 @@
             const overlay = document.getElementById('error-overlay');
             if (overlay) {
                 overlay.style.display = 'block';
-                overlay.innerHTML += `<div><strong>Error:</strong> ${msg}<br><small>${url}:${lineNo}</small></div><br>`;
+                overlay.innerHTML += `<div style="margin-bottom:10px"><strong>❌ Erro:</strong> ${msg}<br><small style="color:#64748b">${url}:${lineNo}</small></div>`;
             }
             return false;
         };
@@ -105,8 +100,18 @@
 <body>
     <div id="root"></div>
     <div id="error-overlay">
-        <h2 style="color: white; margin-bottom: 20px;">CineMatch Crash Log:</h2>
+        <h2 style="color: white; margin-bottom: 20px; font-size: 24px; font-style: italic; font-weight: 900; text-transform: uppercase;">CineMatch Log:</h2>
     </div>
-    <script type="module" src="./index.tsx"></script>
+
+    <!-- 
+      O segredo: type="text/babel" e data-type="module" 
+      fazem o Babel compilar o .tsx e tratá-lo como um módulo.
+    -->
+    <script 
+      type="text/babel" 
+      data-presets="react,typescript" 
+      data-type="module" 
+      src="./index.tsx"
+    ></script>
 </body>
 </html>
