@@ -1,0 +1,5 @@
+{
+  "name": "CineMatch - Movie Tinder for Couples",
+  "description": "A Tinder-style movie matching application designed for couples to discover and match on movies they both want to watch, powered by Gemini API for smart recommendations.",
+  "requestFramePermissions": []
+}
